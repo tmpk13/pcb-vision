@@ -715,7 +715,7 @@ impl App {
                 rect.min + egui::vec2(unit * 4.0, unit * 4.0),
                 egui::Align2::LEFT_TOP,
                 label,
-                egui::FontId::proportional(unit * 5.0),
+                egui::FontId::proportional((rect.width() / 40.0).clamp(10.0, 24.0)),
                 sol::BASE3,
             );
         }
