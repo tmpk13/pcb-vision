@@ -17,12 +17,20 @@ pub struct Similarity {
 
 impl Similarity {
     pub fn identity() -> Similarity {
-        Similarity { scale: 1.0, angle: 0.0, tx: 0.0, ty: 0.0 }
+        Similarity {
+            scale: 1.0,
+            angle: 0.0,
+            tx: 0.0,
+            ty: 0.0,
+        }
     }
 
     pub fn apply(&self, x: f64, y: f64) -> (f64, f64) {
         let (s, c) = self.angle.sin_cos();
-        (self.scale * (c * x - s * y) + self.tx, self.scale * (s * x + c * y) + self.ty)
+        (
+            self.scale * (c * x - s * y) + self.tx,
+            self.scale * (s * x + c * y) + self.ty,
+        )
     }
 
     pub fn inverse(&self) -> Similarity {
@@ -143,11 +151,16 @@ impl Homography {
         let h = &self.0;
         let w = h[6] * x + h[7] * y + h[8];
         let w = if w.abs() < 1e-12 { 1e-12 } else { w };
-        ((h[0] * x + h[1] * y + h[2]) / w, (h[3] * x + h[4] * y + h[5]) / w)
+        (
+            (h[0] * x + h[1] * y + h[2]) / w,
+            (h[3] * x + h[4] * y + h[5]) / w,
+        )
     }
 
     pub fn inverse(&self) -> Option<Homography> {
-        self.matrix().try_inverse().map(|m| Homography::from_matrix(&m))
+        self.matrix()
+            .try_inverse()
+            .map(|m| Homography::from_matrix(&m))
     }
 
     /// The map that applies `self` first, then `next`.
@@ -263,7 +276,11 @@ fn normalize(points: impl Iterator<Item = (f64, f64)>) -> (Matrix3<f64>, Vec<(f6
     let cx = pts.iter().map(|p| p.0).sum::<f64>() / n;
     let cy = pts.iter().map(|p| p.1).sum::<f64>() / n;
     let mean_dist = pts.iter().map(|p| (p.0 - cx).hypot(p.1 - cy)).sum::<f64>() / n;
-    let s = if mean_dist < 1e-12 { 1.0 } else { std::f64::consts::SQRT_2 / mean_dist };
+    let s = if mean_dist < 1e-12 {
+        1.0
+    } else {
+        std::f64::consts::SQRT_2 / mean_dist
+    };
     let t = Matrix3::new(s, 0.0, -s * cx, 0.0, s, -s * cy, 0.0, 0.0, 1.0);
     let out = pts
         .iter()
@@ -323,7 +340,12 @@ mod tests {
 
     #[test]
     fn similarity_round_trip_and_fit() {
-        let s = Similarity { scale: 0.05, angle: 0.7, tx: 12.0, ty: -3.0 };
+        let s = Similarity {
+            scale: 0.05,
+            angle: 0.7,
+            tx: 12.0,
+            ty: -3.0,
+        };
         let p = (100.0, 200.0);
         let q = s.apply(p.0, p.1);
         assert!(close(s.inverse().apply(q.0, q.1), p));
@@ -340,8 +362,9 @@ mod tests {
     #[test]
     fn homography_fit_recovers_a_projective_map() {
         let truth = Homography([0.02, 0.003, 5.0, -0.002, 0.021, 7.0, 1e-4, -5e-5, 1.0]);
-        let pts: Vec<(f64, f64)> =
-            (0..12).map(|i| (((i * 37) % 11) as f64 * 60.0, ((i * 53) % 7) as f64 * 70.0)).collect();
+        let pts: Vec<(f64, f64)> = (0..12)
+            .map(|i| (((i * 37) % 11) as f64 * 60.0, ((i * 53) % 7) as f64 * 70.0))
+            .collect();
         let pairs: Vec<Pair> = pts.iter().map(|&p| (p, truth.apply(p.0, p.1))).collect();
         let h = Homography::fit(&pairs).unwrap();
         assert!(rms_error(&h, &pairs) < 1e-6);
@@ -365,12 +388,23 @@ mod tests {
         let pairs: Vec<Pair> = pts.iter().map(|&p| (p, truth.apply(p.0, p.1))).collect();
         let h = fit_affine(&pairs).unwrap();
         assert!(rms_error(&h, &pairs) < 1e-9);
-        assert!(fit_affine(&[((0.0, 0.0), (0.0, 0.0)), ((1.0, 1.0), (1.0, 1.0)), ((2.0, 2.0), (2.0, 2.0))]).is_none());
+        assert!(fit_affine(&[
+            ((0.0, 0.0), (0.0, 0.0)),
+            ((1.0, 1.0), (1.0, 1.0)),
+            ((2.0, 2.0), (2.0, 2.0))
+        ])
+        .is_none());
     }
 
     #[test]
     fn local_scale_and_angle() {
-        let s = Similarity { scale: 0.1, angle: 0.5, tx: 1.0, ty: 2.0 }.to_homography();
+        let s = Similarity {
+            scale: 0.1,
+            angle: 0.5,
+            tx: 1.0,
+            ty: 2.0,
+        }
+        .to_homography();
         assert!((s.local_scale(10.0, 10.0) - 0.1).abs() < 1e-9);
         assert!((s.local_angle(10.0, 10.0) - 0.5).abs() < 1e-9);
         assert!(Homography::fit(&[((0.0, 0.0), (0.0, 0.0)); 3]).is_none());

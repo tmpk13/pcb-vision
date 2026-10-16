@@ -21,7 +21,10 @@ pub enum BoardError {
     #[error("not a kicad_pcb file (top level is {0:?})")]
     NotABoard(Option<String>),
     #[error("reading {path}: {source}")]
-    Io { path: String, source: std::io::Error },
+    Io {
+        path: String,
+        source: std::io::Error,
+    },
 }
 
 /// Chord tolerance when arcs inside polygons are flattened, mm.
@@ -35,8 +38,10 @@ struct Ctx {
 impl Board {
     pub fn load(path: impl AsRef<Path>) -> Result<Board, BoardError> {
         let path = path.as_ref();
-        let text = std::fs::read_to_string(path)
-            .map_err(|source| BoardError::Io { path: path.display().to_string(), source })?;
+        let text = std::fs::read_to_string(path).map_err(|source| BoardError::Io {
+            path: path.display().to_string(),
+            source,
+        })?;
         parse_board(&text)
     }
 }
@@ -61,7 +66,11 @@ pub fn parse_board(text: &str) -> Result<Board, BoardError> {
             });
         }
     }
-    let mut copper: Vec<String> = board.copper_layers().iter().map(|s| s.to_string()).collect();
+    let mut copper: Vec<String> = board
+        .copper_layers()
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
     if copper.is_empty() {
         copper = vec!["F.Cu".to_string(), "B.Cu".to_string()];
     }
@@ -73,7 +82,9 @@ pub fn parse_board(text: &str) -> Result<Board, BoardError> {
 
     for item in root.lists() {
         match item.name() {
-            Some("footprint") | Some("module") => board.footprints.push(parse_footprint(item, &ctx)),
+            Some("footprint") | Some("module") => {
+                board.footprints.push(parse_footprint(item, &ctx))
+            }
             Some("segment") => {
                 if let Some(t) = parse_segment(item, &ctx) {
                     board.tracks.push(t);
@@ -168,7 +179,10 @@ fn parse_footprint(node: &Sexpr, ctx: &Ctx) -> Footprint {
             _ => {}
         }
     }
-    let pads = node.find_all("pad").filter_map(|p| parse_pad(p, at, rotation, ctx)).collect();
+    let pads = node
+        .find_all("pad")
+        .filter_map(|p| parse_pad(p, at, rotation, ctx))
+        .collect();
     let graphics = node
         .lists()
         .filter_map(|l| {
@@ -178,9 +192,21 @@ fn parse_footprint(node: &Sexpr, ctx: &Ctx) -> Footprint {
             }
             parse_graphic(l, name)
         })
-        .map(|g| Graphic { shape: g.shape.map(|p| at.add(p.rotate_deg(rotation))), ..g })
+        .map(|g| Graphic {
+            shape: g.shape.map(|p| at.add(p.rotate_deg(rotation))),
+            ..g
+        })
         .collect();
-    Footprint { lib_id, reference, value, layer, at, rotation, pads, graphics }
+    Footprint {
+        lib_id,
+        reference,
+        value,
+        layer,
+        at,
+        rotation,
+        pads,
+        graphics,
+    }
 }
 
 fn parse_pad(node: &Sexpr, fp_at: Point, fp_rotation: f64, ctx: &Ctx) -> Option<Pad> {
@@ -205,8 +231,12 @@ fn parse_pad(node: &Sexpr, fp_at: Point, fp_rotation: f64, ctx: &Ctx) -> Option<
     let shape = match shape_name {
         "circle" => PadShape::Circle,
         "oval" => PadShape::Oval,
-        "roundrect" => PadShape::RoundRect { ratio: node.find_f64("roundrect_rratio").unwrap_or(0.25) },
-        "trapezoid" => PadShape::Trapezoid { delta: node.find_xy("rect_delta").unwrap_or((0.0, 0.0)) },
+        "roundrect" => PadShape::RoundRect {
+            ratio: node.find_f64("roundrect_rratio").unwrap_or(0.25),
+        },
+        "trapezoid" => PadShape::Trapezoid {
+            delta: node.find_xy("rect_delta").unwrap_or((0.0, 0.0)),
+        },
         "custom" => {
             let anchor = match node.find("options").and_then(|o| o.find_str("anchor")) {
                 Some("circle") => PadShape::Circle,
@@ -217,15 +247,32 @@ fn parse_pad(node: &Sexpr, fp_at: Point, fp_rotation: f64, ctx: &Ctx) -> Option<
                 .map(|p| {
                     p.lists()
                         .filter_map(|l| parse_graphic(l, l.name()?))
-                        .map(|g| Primitive { shape: g.shape, width: g.width, filled: g.filled })
+                        .map(|g| Primitive {
+                            shape: g.shape,
+                            width: g.width,
+                            filled: g.filled,
+                        })
                         .collect()
                 })
                 .unwrap_or_default();
-            PadShape::Custom { anchor: Box::new(anchor), primitives }
+            PadShape::Custom {
+                anchor: Box::new(anchor),
+                primitives,
+            }
         }
         _ => PadShape::Rect,
     };
-    Some(Pad { number, kind, shape, at, rotation, size, drill, layers, net })
+    Some(Pad {
+        number,
+        kind,
+        shape,
+        at,
+        rotation,
+        size,
+        drill,
+        layers,
+        net,
+    })
 }
 
 /// `(drill [oval] w [h] [(offset x y)])`.
@@ -248,8 +295,16 @@ fn parse_drill(node: &Sexpr) -> Option<Drill> {
         }
     }
     let width = *numbers.first()?;
-    let height = if oval { numbers.get(1).copied().unwrap_or(width) } else { width };
-    Some(Drill { width, height, offset })
+    let height = if oval {
+        numbers.get(1).copied().unwrap_or(width)
+    } else {
+        width
+    };
+    Some(Drill {
+        width,
+        height,
+        offset,
+    })
 }
 
 fn parse_segment(node: &Sexpr, ctx: &Ctx) -> Option<Track> {
@@ -295,7 +350,10 @@ fn parse_zone(node: &Sexpr, ctx: &Ctx, out: &mut Vec<ZoneFill>) {
         .filter(|n| !n.is_empty());
     let zone_layers: Vec<String> = match node.find("layers") {
         Some(l) => expand_layers(l.atom_args(), &ctx.copper),
-        None => node.find_str("layer").map(|s| vec![s.to_string()]).unwrap_or_default(),
+        None => node
+            .find_str("layer")
+            .map(|s| vec![s.to_string()])
+            .unwrap_or_default(),
     };
     let mut fills: Vec<ZoneFill> = Vec::new();
     for fp in node.find_all("filled_polygon") {
@@ -310,7 +368,11 @@ fn parse_zone(node: &Sexpr, ctx: &Ctx, out: &mut Vec<ZoneFill>) {
         }
         match fills.iter_mut().find(|z| z.layer == layer) {
             Some(z) => z.outlines.push(points),
-            None => fills.push(ZoneFill { layer, net: net.clone(), outlines: vec![points] }),
+            None => fills.push(ZoneFill {
+                layer,
+                net: net.clone(),
+                outlines: vec![points],
+            }),
         }
     }
     out.extend(fills);
@@ -349,7 +411,10 @@ fn parse_pts(node: Option<&Sexpr>) -> Vec<Point> {
 /// A `gr_*`, `fp_*` or custom pad primitive drawing, in the frame it is
 /// written in.
 fn parse_graphic(node: &Sexpr, name: &str) -> Option<Graphic> {
-    let base = name.strip_prefix("gr_").or_else(|| name.strip_prefix("fp_")).unwrap_or(name);
+    let base = name
+        .strip_prefix("gr_")
+        .or_else(|| name.strip_prefix("fp_"))
+        .unwrap_or(name);
     let layer = node
         .find_str("layer")
         .or_else(|| node.find("layers").and_then(|l| l.arg_str(0)))
@@ -366,7 +431,10 @@ fn parse_graphic(node: &Sexpr, name: &str) -> Option<Graphic> {
         None => false,
     });
     let shape = match base {
-        "line" => Shape::Line { start: xy_of(node, "start")?, end: xy_of(node, "end")? },
+        "line" => Shape::Line {
+            start: xy_of(node, "start")?,
+            end: xy_of(node, "end")?,
+        },
         "arc" => {
             let start = xy_of(node, "start")?;
             let end = xy_of(node, "end")?;
@@ -389,7 +457,10 @@ fn parse_graphic(node: &Sexpr, name: &str) -> Option<Graphic> {
         "circle" => {
             let center = xy_of(node, "center")?;
             let end = xy_of(node, "end")?;
-            Shape::Circle { center, radius: center.dist(end) }
+            Shape::Circle {
+                center,
+                radius: center.dist(end),
+            }
         }
         "rect" => {
             let s = xy_of(node, "start")?;
@@ -420,7 +491,12 @@ fn parse_graphic(node: &Sexpr, name: &str) -> Option<Graphic> {
         _ => return None,
     };
     let filled = fill.unwrap_or(base == "poly");
-    Some(Graphic { layer, shape, width, filled })
+    Some(Graphic {
+        layer,
+        shape,
+        width,
+        filled,
+    })
 }
 
 #[cfg(test)]
@@ -457,7 +533,11 @@ mod tests {
         // Local (1, 0) turned 90 degrees counterclockwise on screen lands
         // one unit up (negative y) from the footprint center.
         let p1 = &fp.pads[0];
-        assert!((p1.at.x - 10.0).abs() < 1e-9 && (p1.at.y - 19.0).abs() < 1e-9, "{:?}", p1.at);
+        assert!(
+            (p1.at.x - 10.0).abs() < 1e-9 && (p1.at.y - 19.0).abs() < 1e-9,
+            "{:?}",
+            p1.at
+        );
         assert_eq!(p1.rotation, 90.0);
         assert_eq!(p1.net.as_deref(), Some("GND"));
         assert_eq!(p1.layers, vec!["F.Cu", "F.Mask"]);
@@ -507,18 +587,29 @@ mod tests {
                 assert_eq!(*start, Point::new(6.0, 5.0));
                 // A positive legacy angle sweeps clockwise on screen: from
                 // the right of the center down to below it.
-                assert!((end.x - 5.0).abs() < 1e-9 && (end.y - 6.0).abs() < 1e-9, "{end:?}");
+                assert!(
+                    (end.x - 5.0).abs() < 1e-9 && (end.y - 6.0).abs() < 1e-9,
+                    "{end:?}"
+                );
                 assert!(mid.x > 5.0 && mid.y > 5.0);
             }
             other => panic!("{other:?}"),
         }
-        assert!(matches!(board.graphics[0].shape, Shape::Circle { radius, .. } if (radius - 3.0).abs() < 1e-9));
+        assert!(
+            matches!(board.graphics[0].shape, Shape::Circle { radius, .. } if (radius - 3.0).abs() < 1e-9)
+        );
         assert!(board.graphics[1].filled);
     }
 
     #[test]
     fn rejects_other_files() {
-        assert!(matches!(parse_board("(kicad_sch (version 1))"), Err(BoardError::NotABoard(_))));
-        assert!(matches!(parse_board("(kicad_pcb"), Err(BoardError::Syntax(_))));
+        assert!(matches!(
+            parse_board("(kicad_sch (version 1))"),
+            Err(BoardError::NotABoard(_))
+        ));
+        assert!(matches!(
+            parse_board("(kicad_pcb"),
+            Err(BoardError::Syntax(_))
+        ));
     }
 }

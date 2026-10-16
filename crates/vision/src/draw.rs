@@ -24,7 +24,11 @@ pub struct Canvas {
 impl Canvas {
     pub fn from_rgb(img: &Rgb) -> Canvas {
         let mut pixmap = Pixmap::new(img.width as u32, img.height as u32).expect("canvas size");
-        for (dst, src) in pixmap.data_mut().chunks_exact_mut(4).zip(img.data.chunks_exact(3)) {
+        for (dst, src) in pixmap
+            .data_mut()
+            .chunks_exact_mut(4)
+            .zip(img.data.chunks_exact(3))
+        {
             dst[..3].copy_from_slice(src);
             dst[3] = 255;
         }
@@ -32,8 +36,17 @@ impl Canvas {
     }
 
     pub fn into_rgb(self) -> Rgb {
-        let data = self.pixmap.data().chunks_exact(4).flat_map(|px| [px[0], px[1], px[2]]).collect();
-        Rgb { width: self.pixmap.width() as usize, height: self.pixmap.height() as usize, data }
+        let data = self
+            .pixmap
+            .data()
+            .chunks_exact(4)
+            .flat_map(|px| [px[0], px[1], px[2]])
+            .collect();
+        Rgb {
+            width: self.pixmap.width() as usize,
+            height: self.pixmap.height() as usize,
+            data,
+        }
     }
 
     fn paint(color: [u8; 4]) -> Paint<'static> {
@@ -45,8 +58,17 @@ impl Canvas {
 
     pub fn circle(&mut self, x: f64, y: f64, radius: f64, color: [u8; 4], width: f64) {
         if let Some(path) = PathBuilder::from_circle(x as f32, y as f32, radius as f32) {
-            let stroke = Stroke { width: width as f32, ..Stroke::default() };
-            self.pixmap.stroke_path(&path, &Self::paint(color), &stroke, Transform::identity(), None);
+            let stroke = Stroke {
+                width: width as f32,
+                ..Stroke::default()
+            };
+            self.pixmap.stroke_path(
+                &path,
+                &Self::paint(color),
+                &stroke,
+                Transform::identity(),
+                None,
+            );
         }
     }
 
@@ -55,8 +77,18 @@ impl Canvas {
         pb.move_to(a.0 as f32, a.1 as f32);
         pb.line_to(b.0 as f32, b.1 as f32);
         if let Some(path) = pb.finish() {
-            let stroke = Stroke { width: width as f32, line_cap: LineCap::Round, ..Stroke::default() };
-            self.pixmap.stroke_path(&path, &Self::paint(color), &stroke, Transform::identity(), None);
+            let stroke = Stroke {
+                width: width as f32,
+                line_cap: LineCap::Round,
+                ..Stroke::default()
+            };
+            self.pixmap.stroke_path(
+                &path,
+                &Self::paint(color),
+                &stroke,
+                Transform::identity(),
+                None,
+            );
         }
     }
 
@@ -73,8 +105,18 @@ impl Canvas {
             pb.close();
         }
         if let Some(path) = pb.finish() {
-            let stroke = Stroke { width: width as f32, line_cap: LineCap::Round, ..Stroke::default() };
-            self.pixmap.stroke_path(&path, &Self::paint(color), &stroke, Transform::identity(), None);
+            let stroke = Stroke {
+                width: width as f32,
+                line_cap: LineCap::Round,
+                ..Stroke::default()
+            };
+            self.pixmap.stroke_path(
+                &path,
+                &Self::paint(color),
+                &stroke,
+                Transform::identity(),
+                None,
+            );
         }
     }
 }
@@ -94,7 +136,11 @@ pub fn overlay(frame: &Rgb, obs: &Observation, model: &BoardModel) -> Rgb {
         if let Some(view_to_image) = pose.image_to_view.inverse() {
             for f in &model.features {
                 let (x, y) = view_to_image.apply(f.x, f.y);
-                if x < -10.0 || y < -10.0 || x > frame.width as f64 + 10.0 || y > frame.height as f64 + 10.0 {
+                if x < -10.0
+                    || y < -10.0
+                    || x > frame.width as f64 + 10.0
+                    || y > frame.height as f64 + 10.0
+                {
                     continue;
                 }
                 canvas.circle(x, y, unit * 0.8, CYAN, unit * 0.4);
@@ -105,13 +151,26 @@ pub fn overlay(frame: &Rgb, obs: &Observation, model: &BoardModel) -> Rgb {
                 canvas.line((s.x, s.y), (x, y), RED, unit * 0.5);
             }
             for l in &model.outline {
-                let pts: Vec<(f64, f64)> = l.iter().map(|p: &Point| view_to_image.apply(p.x, p.y)).collect();
+                let pts: Vec<(f64, f64)> = l
+                    .iter()
+                    .map(|p: &Point| view_to_image.apply(p.x, p.y))
+                    .collect();
                 canvas.polyline(&pts, true, MAGENTA, unit * 0.7);
             }
         }
         let (cx, cy) = (frame.width as f64 / 2.0, frame.height as f64 / 2.0);
-        canvas.line((cx - unit * 8.0, cy), (cx + unit * 8.0, cy), BLUE, unit * 0.6);
-        canvas.line((cx, cy - unit * 8.0), (cx, cy + unit * 8.0), BLUE, unit * 0.6);
+        canvas.line(
+            (cx - unit * 8.0, cy),
+            (cx + unit * 8.0, cy),
+            BLUE,
+            unit * 0.6,
+        );
+        canvas.line(
+            (cx, cy - unit * 8.0),
+            (cx, cy + unit * 8.0),
+            BLUE,
+            unit * 0.6,
+        );
     }
     canvas.into_rgb()
 }
@@ -119,7 +178,11 @@ pub fn overlay(frame: &Rgb, obs: &Observation, model: &BoardModel) -> Rgb {
 /// The board picture with the camera's field of view drawn on it.
 pub fn board_map(model: &BoardModel, obs: &Observation) -> Rgb {
     let raster = &model.raster;
-    let base = Rgb { width: raster.width(), height: raster.height(), data: raster.rgb() };
+    let base = Rgb {
+        width: raster.width(),
+        height: raster.height(),
+        data: raster.rgb(),
+    };
     let mut canvas = Canvas::from_rgb(&base);
     let unit = (raster.width().max(raster.height()) as f64 / 400.0).max(1.0);
     if let Some(pose) = &obs.pose {

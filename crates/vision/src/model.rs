@@ -5,7 +5,9 @@
 //! mirrored in x for the back, so a picture of either side maps to it with
 //! a plain rotation, scale and perspective.
 
-use pcbv_board::{outline_loops, render, Board, Finish, Point, Raster, Rect, RenderOptions, Side, Style};
+use pcbv_board::{
+    outline_loops, render, Board, Finish, Point, Raster, Rect, RenderOptions, Side, Style,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::blobs::components;
@@ -56,7 +58,8 @@ impl BoardModel {
     /// `px_per_mm` sets how finely the copper is sampled for island
     /// centroids and how large the display picture is.
     pub fn build(board: &Board, side: Side, finish: Finish, px_per_mm: f64) -> BoardModel {
-        let mut mask_opts = RenderOptions::new(side, px_per_mm, Style::copper_mask()).with_finish(finish);
+        let mut mask_opts =
+            RenderOptions::new(side, px_per_mm, Style::copper_mask()).with_finish(finish);
         mask_opts.layers.silk = false;
         mask_opts.layers.outline = false;
         let mask = render(board, &mask_opts);
@@ -92,17 +95,28 @@ impl BoardModel {
             Finish::Bare => Style::photo(),
             Finish::Masked => Style::masked_photo(),
         };
-        let extent = board.bbox().unwrap_or(Rect { min: Point::ZERO, max: Point::new(10.0, 10.0) });
+        let extent = board.bbox().unwrap_or(Rect {
+            min: Point::ZERO,
+            max: Point::new(10.0, 10.0),
+        });
         let mut display = RenderOptions::new(side, px_per_mm, style).with_finish(finish);
         // Room around the board for a field of view that reaches past it.
         display.margin_mm = extent.width().max(extent.height()) * 0.3;
         let raster = render(board, &display);
-        let bbox = Rect::from_points(&[view_of(side, extent.min), view_of(side, extent.max)]).unwrap();
+        let bbox =
+            Rect::from_points(&[view_of(side, extent.min), view_of(side, extent.max)]).unwrap();
         let outline = outline_loops(board)
             .into_iter()
             .map(|l| l.into_iter().map(|p| view_of(side, p)).collect())
             .collect();
-        BoardModel { side, finish, features, bbox, outline, raster }
+        BoardModel {
+            side,
+            finish,
+            features,
+            bbox,
+            outline,
+            raster,
+        }
     }
 
     /// View frame to the display picture's pixels.
@@ -111,11 +125,17 @@ impl BoardModel {
     }
 
     pub fn islands(&self) -> usize {
-        self.features.iter().filter(|f| f.kind == FeatureKind::Island).count()
+        self.features
+            .iter()
+            .filter(|f| f.kind == FeatureKind::Island)
+            .count()
     }
 
     pub fn holes(&self) -> usize {
-        self.features.iter().filter(|f| f.kind == FeatureKind::Hole).count()
+        self.features
+            .iter()
+            .filter(|f| f.kind == FeatureKind::Hole)
+            .count()
     }
 }
 
@@ -149,9 +169,17 @@ mod tests {
         assert!((pad2.y - 10.0).abs() < 0.05);
         assert!((pad2.area - 2.0).abs() < 0.15, "{}", pad2.area);
         assert!((pad2.major - 2.0 * 1.1547).abs() < 0.2, "{}", pad2.major);
-        let ring = model.features.iter().find(|f| f.kind == FeatureKind::Island && (f.x - 10.0).abs() < 0.1).unwrap();
+        let ring = model
+            .features
+            .iter()
+            .find(|f| f.kind == FeatureKind::Island && (f.x - 10.0).abs() < 0.1)
+            .unwrap();
         let ring_area = std::f64::consts::PI * (1.5f64.powi(2) - 0.75f64.powi(2));
-        assert!((ring.area - ring_area).abs() < 0.3, "{} vs {ring_area}", ring.area);
+        assert!(
+            (ring.area - ring_area).abs() < 0.3,
+            "{} vs {ring_area}",
+            ring.area
+        );
         assert_eq!(model.outline.len(), 1);
     }
 
@@ -161,7 +189,11 @@ mod tests {
         let model = BoardModel::build(&board, Side::Back, Finish::Masked, 20.0);
         // Pad 3 opens the back mask; the track is covered.
         assert_eq!(model.islands(), 2, "{:?}", model.features);
-        let pad3 = model.features.iter().find(|f| f.kind == FeatureKind::Island && (f.y - 15.0).abs() < 0.1).unwrap();
+        let pad3 = model
+            .features
+            .iter()
+            .find(|f| f.kind == FeatureKind::Island && (f.y - 15.0).abs() < 0.1)
+            .unwrap();
         assert!((pad3.x + 15.0).abs() < 0.05, "{pad3:?}");
         assert!(model.bbox.min.x < -19.0 && model.bbox.max.x < 1.0);
         let (px, _) = model.view_to_raster(Point::new(-15.0, 15.0));

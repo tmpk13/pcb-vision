@@ -1,0 +1,54 @@
+[tasks.build]
+description = "Build every crate"
+run = "cargo build -q"
+
+[tasks.test]
+description = "Every test: parser fixtures, vision units, synthetic end to end, camera"
+run = "cargo test -q"
+
+[tasks.check]
+description = "Clippy on everything and a format check"
+run = """
+cargo clippy -q --all-targets -- -D warnings
+cargo fmt --check
+"""
+
+[tasks.live]
+description = "The live viewer on /dev/video0: mise run live -- board.kicad_pcb --finish masked"
+run = "cargo run -q -p pcbv -- live"
+
+[tasks.locate]
+description = "Locate one picture: mise run locate -- board.kicad_pcb photo.jpg --finish masked -o overlay.png"
+run = "cargo run -q -p pcbv -- locate"
+
+[tasks.render]
+description = "Draw a board side: mise run render -- board.kicad_pcb -o board.png --style masked --finish masked"
+run = "cargo run -q -p pcbv -- render"
+
+[tasks.synth]
+description = "A synthetic camera picture with its true pose: mise run synth -- board.kicad_pcb -o shot.png --angle 30 --px-per-mm 25"
+run = "cargo run -q -p pcbv -- synth"
+
+[tasks.cameras]
+description = "List capture devices and their modes"
+run = "cargo run -q -p pcbv -- cameras"
+
+[tasks.photos]
+description = "Locate every photo in ref/photos against the Forest Sensor Platform board, one line each"
+run = """
+cargo build -q -p pcbv
+board="${FOREST_PCB:-$HOME/forest/Forest-Sensor-Platform/Forest-Sensor-Platform.kicad_pcb}"
+for f in ref/photos/*.jpg; do
+    printf "%s: " "$(basename "$f")"
+    ./target/debug/pcbv locate "$board" "$f" --finish masked | grep -E "^(locked|lost)" | cut -c1-160
+done
+"""
+
+[tasks.fixtures]
+description = "Regenerate the pcbnew ground truth next to each board in fixtures/boards (needs the system python with pcbnew)"
+run = """
+for b in fixtures/boards/*.kicad_pcb; do
+    python3 tools/dump_board.py "$b" > "${b%.kicad_pcb}.fixture.json" 2>/dev/null
+    echo "$b"
+done
+"""

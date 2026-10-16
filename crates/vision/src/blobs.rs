@@ -111,7 +111,11 @@ pub fn local_contrast(channel: &Gray, radius: usize, polarity: Polarity) -> Gray
             Polarity::Dark => m.saturating_sub(v),
         })
         .collect();
-    Gray { width: channel.width, height: channel.height, data }
+    Gray {
+        width: channel.width,
+        height: channel.height,
+        data,
+    }
 }
 
 struct Stats {
@@ -319,14 +323,27 @@ pub fn detect(channel: &Gray, params: &BlobParams) -> Vec<Blob> {
 /// the floor when they fall in two groups, the floor itself when they do
 /// not (one material above it) or when there is nothing above it.
 pub fn global_threshold(channel: &Gray, floor: u8) -> u8 {
-    let above: Vec<u8> = channel.data.iter().copied().filter(|&v| v >= floor).collect();
+    let above: Vec<u8> = channel
+        .data
+        .iter()
+        .copied()
+        .filter(|&v| v >= floor)
+        .collect();
     if above.is_empty() || above.len() * 200 < channel.data.len() {
         return 255;
     }
     let n = above.len() as f64;
     let mean = above.iter().map(|&v| v as f64).sum::<f64>() / n;
-    let variance = above.iter().map(|&v| (v as f64 - mean).powi(2)).sum::<f64>() / n;
-    let sub = Gray { width: above.len(), height: 1, data: above };
+    let variance = above
+        .iter()
+        .map(|&v| (v as f64 - mean).powi(2))
+        .sum::<f64>()
+        / n;
+    let sub = Gray {
+        width: above.len(),
+        height: 1,
+        data: above,
+    };
     let t = otsu_threshold(&sub);
     // Separability: how much of the spread the split explains.
     let (mut n0, mut s0) = (0.0, 0.0);
@@ -367,8 +384,18 @@ pub fn detect_global(channel: &Gray, params: &BlobParams) -> Vec<Blob> {
             d.clamp(0, 255) as u8
         })
         .collect();
-    let contrast = Gray { width: channel.width, height: channel.height, data };
-    detect_in_contrast(&contrast, &BlobParams { threshold: params.threshold.max(1), ..params.clone() })
+    let contrast = Gray {
+        width: channel.width,
+        height: channel.height,
+        data,
+    };
+    detect_in_contrast(
+        &contrast,
+        &BlobParams {
+            threshold: params.threshold.max(1),
+            ..params.clone()
+        },
+    )
 }
 
 /// Detection by either segmentation.
@@ -402,7 +429,9 @@ mod tests {
             for x in 0..w {
                 let cx = x as f64 + 0.5;
                 let cy = y as f64 + 0.5;
-                let inside = discs.iter().any(|&(dx, dy, r)| (cx - dx).hypot(cy - dy) <= r);
+                let inside = discs
+                    .iter()
+                    .any(|&(dx, dy, r)| (cx - dx).hypot(cy - dy) <= r);
                 g.data[y * w + x] = if inside { fg } else { bg };
             }
         }
@@ -412,12 +441,32 @@ mod tests {
     #[test]
     fn finds_discs_with_subpixel_centers() {
         let g = disc_image(120, 80, &[(30.3, 40.6, 6.0), (90.0, 20.0, 3.0)], 200, 50);
-        let blobs = detect(&g, &BlobParams { radius: 20, threshold: 30, ..BlobParams::default() });
+        let blobs = detect(
+            &g,
+            &BlobParams {
+                radius: 20,
+                threshold: 30,
+                ..BlobParams::default()
+            },
+        );
         assert_eq!(blobs.len(), 2, "{blobs:?}");
-        let big = blobs.iter().max_by(|a, b| a.area.partial_cmp(&b.area).unwrap()).unwrap();
-        assert!((big.x - 30.3).abs() < 0.3 && (big.y - 40.6).abs() < 0.3, "{big:?}");
-        assert!((big.area - std::f64::consts::PI * 36.0).abs() < 12.0, "{}", big.area);
-        assert!((big.major - 12.0).abs() < 1.5 && (big.minor - 12.0).abs() < 1.5, "{big:?}");
+        let big = blobs
+            .iter()
+            .max_by(|a, b| a.area.partial_cmp(&b.area).unwrap())
+            .unwrap();
+        assert!(
+            (big.x - 30.3).abs() < 0.3 && (big.y - 40.6).abs() < 0.3,
+            "{big:?}"
+        );
+        assert!(
+            (big.area - std::f64::consts::PI * 36.0).abs() < 12.0,
+            "{}",
+            big.area
+        );
+        assert!(
+            (big.major - 12.0).abs() < 1.5 && (big.minor - 12.0).abs() < 1.5,
+            "{big:?}"
+        );
         assert!(big.fill_ratio() > 0.7);
     }
 
@@ -429,11 +478,23 @@ mod tests {
             g.data[x] = 20;
             g.data[60 + x] = 20;
         }
-        let params = BlobParams { polarity: Polarity::Dark, radius: 15, threshold: 30, min_fill: 0.0, ..BlobParams::default() };
+        let params = BlobParams {
+            polarity: Polarity::Dark,
+            radius: 15,
+            threshold: 30,
+            min_fill: 0.0,
+            ..BlobParams::default()
+        };
         let blobs = detect(&g, &params);
         assert_eq!(blobs.len(), 1);
         assert!(!blobs[0].touches_border);
-        let all = detect(&g, &BlobParams { keep_border: true, ..params });
+        let all = detect(
+            &g,
+            &BlobParams {
+                keep_border: true,
+                ..params
+            },
+        );
         assert_eq!(all.len(), 2);
         assert!(all.iter().any(|b| b.touches_border && b.fill_ratio() > 0.9));
     }
@@ -454,11 +515,19 @@ mod tests {
                 }
             }
         }
-        let params = BlobParams { threshold: 5, min_area: 10, keep_border: false, ..BlobParams::default() };
+        let params = BlobParams {
+            threshold: 5,
+            min_area: 10,
+            keep_border: false,
+            ..BlobParams::default()
+        };
         let global = detect_global(&g, &params);
         // Cells not touching the border: 3 across, 1 down.
         assert_eq!(global.len(), 3, "{global:?}");
-        assert!(global.iter().all(|b| (b.area - 23.0 * 28.0).abs() < 1.0), "{global:?}");
+        assert!(
+            global.iter().all(|b| (b.area - 23.0 * 28.0).abs() < 1.0),
+            "{global:?}"
+        );
     }
 
     #[test]

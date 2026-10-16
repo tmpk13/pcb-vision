@@ -1,16 +1,23 @@
 //! `pcbv`: command line front end for the board model and the localizer.
 
+mod live;
+
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 use pcbv_board::{render, Board, Finish, Point, RenderOptions, Side, Style};
-use pcbv_vision::BoardModel;
 use pcbv_vision::draw::{board_map, overlay};
-use pcbv_vision::{camera, synthesize, Localizer, LocalizerConfig, Look, Polarity, Rgb, State, SynthParams};
+use pcbv_vision::BoardModel;
+use pcbv_vision::{camera, synthesize, Localizer, LocalizerConfig, Look, Rgb, State, SynthParams};
 
 #[derive(Parser)]
-#[command(name = "pcbv", version, about = "Locate a camera view on a PCB from its KiCad design")]
+#[command(
+    name = "pcbv",
+    version,
+    about = "Locate a camera view on a PCB from its KiCad design"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -85,6 +92,40 @@ enum Command {
         #[arg(long, default_value_t = 1)]
         seed: u64,
     },
+    /// List the cameras and the modes they offer
+    Cameras {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Locate the board in a camera's pictures as they come, in a window
+    Live {
+        pcb: PathBuf,
+        #[command(flatten)]
+        view: ViewArgs,
+        /// Camera device
+        #[arg(long, default_value = "/dev/video0")]
+        camera: String,
+        /// Capture size, "WIDTHxHEIGHT"
+        #[arg(long, default_value = "1280x720")]
+        size: String,
+        #[arg(long, default_value_t = 30)]
+        fps: u32,
+        /// Print a line of JSON per frame to stdout
+        #[arg(long)]
+        json: bool,
+        /// No window; implies --json
+        #[arg(long)]
+        no_window: bool,
+        /// With --no-window: stop after this many frames
+        #[arg(long)]
+        frames: Option<usize>,
+        /// Where snapshots go
+        #[arg(long, default_value = "var/snapshots")]
+        snapshot_dir: PathBuf,
+        /// Save a picture of the window here after a few frames and close
+        #[arg(long)]
+        screenshot: Option<PathBuf>,
+    },
 }
 
 /// How the board is looked at.
@@ -96,14 +137,12 @@ struct ViewArgs {
     /// bare or masked: whether solder mask hides the copper
     #[arg(long, default_value = "bare")]
     finish: String,
-    /// How to see spots, "channel-segmentation": luma-local (bright pads on
-    /// dark mask) or chroma-global (copper against anything else); both are
-    /// tried in turn when not given
+    /// How to see spots, "channel-segmentation[-polarity]": luma-local
+    /// (bright pads on dark mask), chroma-global (copper against anything
+    /// else) or luma-local-dark (holes); all three are tried in turn when
+    /// not given
     #[arg(long)]
     look: Option<String>,
-    /// bright spots (pads) or dark spots (holes)
-    #[arg(long, default_value = "bright")]
-    polarity: String,
     /// Allowed millimeters per pixel, "low:high"
     #[arg(long)]
     scale: Option<String>,
@@ -120,17 +159,18 @@ impl ViewArgs {
         let mut config = LocalizerConfig {
             side: side_of(&self.side)?,
             finish: finish_of(&self.finish)?,
-            polarity: Polarity::parse(&self.polarity).ok_or_else(|| anyhow!("polarity must be bright or dark"))?,
             work_width: self.work_width,
             threshold: self.threshold,
             ..LocalizerConfig::default()
         };
         if let Some(text) = &self.look {
-            let look = Look::parse(text).ok_or_else(|| anyhow!("look must be channel-segmentation, such as luma-local or chroma-global"))?;
+            let look = Look::parse(text).ok_or_else(|| anyhow!("look must be channel-segmentation[-polarity], such as luma-local, chroma-global or luma-local-dark"))?;
             config.looks = vec![look];
         }
         if let Some(range) = &self.scale {
-            let (lo, hi) = range.split_once(':').ok_or_else(|| anyhow!("scale must be low:high"))?;
+            let (lo, hi) = range
+                .split_once(':')
+                .ok_or_else(|| anyhow!("scale must be low:high"))?;
             let lo: f64 = lo.parse()?;
             let hi: f64 = hi.parse()?;
             config.matching.scale_range = (lo, hi);
@@ -141,7 +181,9 @@ impl ViewArgs {
 }
 
 fn pair_of(text: &str) -> Result<(f64, f64)> {
-    let (a, b) = text.split_once(',').ok_or_else(|| anyhow!("expected two numbers separated by a comma, not {text:?}"))?;
+    let (a, b) = text
+        .split_once(',')
+        .ok_or_else(|| anyhow!("expected two numbers separated by a comma, not {text:?}"))?;
     Ok((a.trim().parse()?, b.trim().parse()?))
 }
 
@@ -177,8 +219,21 @@ fn main() -> Result<()> {
             if json {
                 println!("{}", serde_json::to_string_pretty(&stats)?);
             } else {
-                println!("{}: format {} by {}", pcb.display(), board.version, board.generator);
-                println!("layers: {}", board.layers.iter().map(|l| l.name.as_str()).collect::<Vec<_>>().join(" "));
+                println!(
+                    "{}: format {} by {}",
+                    pcb.display(),
+                    board.version,
+                    board.generator
+                );
+                println!(
+                    "layers: {}",
+                    board
+                        .layers
+                        .iter()
+                        .map(|l| l.name.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                );
                 println!(
                     "footprints {} pads {} holes {} tracks {} arcs {} vias {} zone outlines {} graphics {}",
                     stats.footprints, stats.pads, stats.holes, stats.tracks, stats.arcs, stats.vias, stats.zone_outlines, stats.graphics
@@ -186,25 +241,55 @@ fn main() -> Result<()> {
                 match stats.bbox {
                     Some(b) => println!(
                         "extent x {:.3}..{:.3} y {:.3}..{:.3} ({:.2} x {:.2} mm)",
-                        b.min.x, b.max.x, b.min.y, b.max.y, b.width(), b.height()
+                        b.min.x,
+                        b.max.x,
+                        b.min.y,
+                        b.max.y,
+                        b.width(),
+                        b.height()
                     ),
                     None => println!("extent: none"),
                 }
             }
         }
-        Command::Render { pcb, output, side, px_per_mm, style, finish } => {
+        Command::Render {
+            pcb,
+            output,
+            side,
+            px_per_mm,
+            style,
+            finish,
+        } => {
             let board = load_board(&pcb)?;
-            let opts = RenderOptions::new(side_of(&side)?, px_per_mm, style_of(&style)?).with_finish(finish_of(&finish)?);
+            let opts = RenderOptions::new(side_of(&side)?, px_per_mm, style_of(&style)?)
+                .with_finish(finish_of(&finish)?);
             let raster = render(&board, &opts);
-            raster.save_png(&output).map_err(|e| anyhow!("writing {}: {e}", output.display()))?;
-            println!("{}: {}x{} px, {:.3} px/mm, {} side", output.display(), raster.width(), raster.height(), raster.px_per_mm, raster.side);
+            raster
+                .save_png(&output)
+                .map_err(|e| anyhow!("writing {}: {e}", output.display()))?;
+            println!(
+                "{}: {}x{} px, {:.3} px/mm, {} side",
+                output.display(),
+                raster.width(),
+                raster.height(),
+                raster.px_per_mm,
+                raster.side
+            );
         }
-        Command::Locate { pcb, image, view, overlay: overlay_path, map, json } => {
+        Command::Locate {
+            pcb,
+            image,
+            view,
+            overlay: overlay_path,
+            map,
+            json,
+        } => {
             let board = load_board(&pcb)?;
             let config = view.config()?;
             let looks = config.looks.len();
             let mut localizer = Localizer::new(&board, config);
-            let frame = Rgb::load(&image).with_context(|| format!("loading {}", image.display()))?;
+            let frame =
+                Rgb::load(&image).with_context(|| format!("loading {}", image.display()))?;
             let mut obs = localizer.process(&frame);
             for _ in 1..looks {
                 if obs.pose.is_some() {
@@ -234,16 +319,77 @@ fn main() -> Result<()> {
                 }
             }
             if let Some(path) = overlay_path {
-                overlay(&frame, &obs, &localizer.model).save_png(&path).with_context(|| format!("writing {}", path.display()))?;
+                overlay(&frame, &obs, &localizer.model)
+                    .save_png(&path)
+                    .with_context(|| format!("writing {}", path.display()))?;
             }
             if let Some(path) = map {
-                board_map(&localizer.model, &obs).save_png(&path).with_context(|| format!("writing {}", path.display()))?;
+                board_map(&localizer.model, &obs)
+                    .save_png(&path)
+                    .with_context(|| format!("writing {}", path.display()))?;
             }
             if obs.state != State::Locked {
                 std::process::exit(2);
             }
         }
-        Command::Synth { pcb, output, side, finish, center, angle, px_per_mm, tilt, width, height, seed } => {
+        Command::Cameras { json } => {
+            let devices = pcbv_camera::list_devices();
+            if json {
+                println!("{}", serde_json::to_string_pretty(&devices)?);
+            } else if devices.is_empty() {
+                println!("no capture devices");
+            } else {
+                for d in devices {
+                    println!("{} ({})", d.path, d.name);
+                    for m in d.modes {
+                        println!("  {} {}x{} {:.0} fps", m.fourcc, m.width, m.height, m.fps);
+                    }
+                }
+            }
+        }
+        Command::Live {
+            pcb,
+            view,
+            camera,
+            size,
+            fps,
+            json,
+            no_window,
+            frames,
+            snapshot_dir,
+            screenshot,
+        } => {
+            let board = Arc::new(load_board(&pcb)?);
+            let config = view.config()?;
+            let (w, h) = size
+                .split_once('x')
+                .ok_or_else(|| anyhow!("size must be WIDTHxHEIGHT"))?;
+            let capture = pcbv_camera::CaptureConfig {
+                path: camera,
+                width: w.parse()?,
+                height: h.parse()?,
+                fps,
+            };
+            let worker = live::start(board, config.clone(), capture, json || no_window)?;
+            if no_window {
+                live::headless(worker, frames)?;
+            } else {
+                live::run_window(worker, config, snapshot_dir, screenshot)?;
+            }
+        }
+        Command::Synth {
+            pcb,
+            output,
+            side,
+            finish,
+            center,
+            angle,
+            px_per_mm,
+            tilt,
+            width,
+            height,
+            seed,
+        } => {
             let board = load_board(&pcb)?;
             let side = side_of(&side)?;
             let finish = finish_of(&finish)?;
@@ -259,17 +405,27 @@ fn main() -> Result<()> {
             let view_center = pcbv_vision::model::view_of(side, center);
             let tilt = pair_of(&tilt)?;
             let truth = camera(view_center, angle, px_per_mm, tilt, width, height);
-            let params = SynthParams { width, height, seed, ..SynthParams::default() };
+            let params = SynthParams {
+                width,
+                height,
+                seed,
+                ..SynthParams::default()
+            };
             let frame = synthesize(&source, &truth, &params);
-            frame.save_png(&output).with_context(|| format!("writing {}", output.display()))?;
-            println!("{}", serde_json::json!({
-                "output": output,
-                "side": side.to_string(),
-                "center_board": [center.x, center.y],
-                "angle_deg": angle,
-                "px_per_mm": px_per_mm,
-                "view_to_image": truth.0,
-            }));
+            frame
+                .save_png(&output)
+                .with_context(|| format!("writing {}", output.display()))?;
+            println!(
+                "{}",
+                serde_json::json!({
+                    "output": output,
+                    "side": side.to_string(),
+                    "center_board": [center.x, center.y],
+                    "angle_deg": angle,
+                    "px_per_mm": px_per_mm,
+                    "view_to_image": truth.0,
+                })
+            );
         }
     }
     Ok(())

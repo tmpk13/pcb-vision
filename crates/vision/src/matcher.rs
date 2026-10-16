@@ -81,7 +81,14 @@ impl Grid {
     pub fn new(points: &[(f64, f64)], cell: f64) -> Grid {
         let cell = cell.max(1e-6);
         if points.is_empty() {
-            return Grid { cell, min_x: 0.0, min_y: 0.0, cols: 1, rows: 1, bins: vec![Vec::new()] };
+            return Grid {
+                cell,
+                min_x: 0.0,
+                min_y: 0.0,
+                cols: 1,
+                rows: 1,
+                bins: vec![Vec::new()],
+            };
         }
         let min_x = points.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
         let min_y = points.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
@@ -95,7 +102,14 @@ impl Grid {
             let r = (((p.1 - min_y) / cell).floor() as usize).min(rows - 1);
             bins[r * cols + c].push(i as u32);
         }
-        Grid { cell, min_x, min_y, cols, rows, bins }
+        Grid {
+            cell,
+            min_x,
+            min_y,
+            cols,
+            rows,
+            bins,
+        }
     }
 
     /// Indices of the points in the cells that a circle of `radius` at
@@ -121,7 +135,14 @@ impl Grid {
     }
 
     /// The nearest of `points` within `radius`, with its distance.
-    pub fn nearest(&self, points: &[(f64, f64)], x: f64, y: f64, radius: f64, scratch: &mut Vec<u32>) -> Option<(usize, f64)> {
+    pub fn nearest(
+        &self,
+        points: &[(f64, f64)],
+        x: f64,
+        y: f64,
+        radius: f64,
+        scratch: &mut Vec<u32>,
+    ) -> Option<(usize, f64)> {
         self.candidates(x, y, radius, scratch);
         let mut best: Option<(usize, f64)> = None;
         for &i in scratch.iter() {
@@ -187,18 +208,36 @@ impl ModelIndex {
         for (a, list) in knn.iter().enumerate() {
             for &b in list {
                 if a < b || !knn[b].contains(&a) {
-                    let dist = (positions[a].0 - positions[b].0).hypot(positions[a].1 - positions[b].1);
-                    pairs.push(ModelPair { a: a as u32, b: b as u32, dist });
+                    let dist =
+                        (positions[a].0 - positions[b].0).hypot(positions[a].1 - positions[b].1);
+                    pairs.push(ModelPair {
+                        a: a as u32,
+                        b: b as u32,
+                        dist,
+                    });
                 }
             }
         }
         pairs.sort_by(|p, q| p.dist.partial_cmp(&q.dist).unwrap());
-        ModelIndex { features, positions, grid, neighbors: knn, pairs }
+        ModelIndex {
+            features,
+            positions,
+            grid,
+            neighbors: knn,
+            pairs,
+        }
     }
 
     /// The nearest feature within `radius` of a view frame point, with its
     /// distance; `kind` restricts the search.
-    pub fn nearest(&self, x: f64, y: f64, radius: f64, kind: Option<FeatureKind>, scratch: &mut Vec<u32>) -> Option<(usize, f64)> {
+    pub fn nearest(
+        &self,
+        x: f64,
+        y: f64,
+        radius: f64,
+        kind: Option<FeatureKind>,
+        scratch: &mut Vec<u32>,
+    ) -> Option<(usize, f64)> {
         self.grid.candidates(x, y, radius, scratch);
         let mut best: Option<(usize, f64)> = None;
         for &i in scratch.iter() {
@@ -215,7 +254,14 @@ impl ModelIndex {
     }
 
     /// The two nearest features within `radius`, nearest first.
-    pub fn nearest_two(&self, x: f64, y: f64, radius: f64, kind: Option<FeatureKind>, scratch: &mut Vec<u32>) -> (Option<(usize, f64)>, Option<f64>) {
+    pub fn nearest_two(
+        &self,
+        x: f64,
+        y: f64,
+        radius: f64,
+        kind: Option<FeatureKind>,
+        scratch: &mut Vec<u32>,
+    ) -> (Option<(usize, f64)>, Option<f64>) {
         self.grid.candidates(x, y, radius, scratch);
         let mut best: Option<(usize, f64)> = None;
         let mut second: Option<f64> = None;
@@ -242,6 +288,11 @@ impl ModelIndex {
             }
         }
         (best, second)
+    }
+
+    /// Feature indices in the cells a circle can reach.
+    pub fn grid_candidates(&self, x: f64, y: f64, radius: f64, out: &mut Vec<u32>) {
+        self.grid.candidates(x, y, radius, out);
     }
 
     pub fn len(&self) -> usize {
@@ -374,7 +425,11 @@ fn area_compatible(params: &MatchParams, p: &ImagePoint, f: &Feature, scale: f64
 }
 
 /// The search without a verifier: the best hypothesis by score.
-pub fn match_constellation(points: &[ImagePoint], model: &ModelIndex, params: &MatchParams) -> Option<MatchResult> {
+pub fn match_constellation(
+    points: &[ImagePoint],
+    model: &ModelIndex,
+    params: &MatchParams,
+) -> Option<MatchResult> {
     match_constellation_with(points, model, params, |_| false)
 }
 
@@ -382,7 +437,12 @@ pub fn match_constellation(points: &[ImagePoint], model: &ModelIndex, params: &M
 /// and reaches the candidate score is handed to `accept`, and the search
 /// ends on the first one it takes. Otherwise the best hypothesis by score
 /// is returned at the end, verified or not.
-pub fn match_constellation_with(points: &[ImagePoint], model: &ModelIndex, params: &MatchParams, mut accept: impl FnMut(&MatchResult) -> bool) -> Option<MatchResult> {
+pub fn match_constellation_with(
+    points: &[ImagePoint],
+    model: &ModelIndex,
+    params: &MatchParams,
+    mut accept: impl FnMut(&MatchResult) -> bool,
+) -> Option<MatchResult> {
     if points.len() < 3 || model.len() < 3 {
         return None;
     }
@@ -397,7 +457,11 @@ pub fn match_constellation_with(points: &[ImagePoint], model: &ModelIndex, param
         }
     }
     // Spots binned for the model-driven gate, at a cell near the spacing.
-    let span = positions.iter().map(|p| p.0).fold(f64::NEG_INFINITY, f64::max) - positions.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
+    let span = positions
+        .iter()
+        .map(|p| p.0)
+        .fold(f64::NEG_INFINITY, f64::max)
+        - positions.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
     let spot_grid = Grid::new(&positions, (span / 40.0).max(2.0));
     // A sample of spots for the middle stage of verification.
     let sample: Vec<usize> = {
@@ -430,20 +494,28 @@ pub fn match_constellation_with(points: &[ImagePoint], model: &ModelIndex, param
         let end = model.pairs.partition_point(|p| p.dist <= hi);
         let mid = ((pi.x + pj.x) / 2.0, (pi.y + pj.y) / 2.0);
         for mp in &model.pairs[start..end] {
-            for (fa, fb) in [(mp.a as usize, mp.b as usize), (mp.b as usize, mp.a as usize)] {
+            for (fa, fb) in [
+                (mp.a as usize, mp.b as usize),
+                (mp.b as usize, mp.a as usize),
+            ] {
                 let (fi, fj) = (&model.features[fa], &model.features[fb]);
                 if params.same_kind && (fi.kind != pi.kind || fj.kind != pj.kind) {
                     continue;
                 }
                 let scale = mp.dist / d_img;
-                if !area_compatible(params, pi, fi, scale) || !area_compatible(params, pj, fj, scale) {
+                if !area_compatible(params, pi, fi, scale)
+                    || !area_compatible(params, pj, fj, scale)
+                {
                     continue;
                 }
                 hypotheses += 1;
                 if hypotheses > params.max_hypotheses {
                     break 'search;
                 }
-                let Some(s) = Similarity::from_two_pairs([(pi.x, pi.y), (pj.x, pj.y)], [(fi.x, fi.y), (fj.x, fj.y)]) else {
+                let Some(s) = Similarity::from_two_pairs(
+                    [(pi.x, pi.y), (pj.x, pj.y)],
+                    [(fi.x, fi.y), (fj.x, fj.y)],
+                ) else {
                     continue;
                 };
                 // Stage one: the model's neighbors of the first feature
@@ -456,7 +528,10 @@ pub fn match_constellation_with(points: &[ImagePoint], model: &ModelIndex, param
                 for &n in model.neighbors[fa].iter().filter(|&&n| n != fb).take(6) {
                     need += 1;
                     let (x, y) = inv.apply(model.positions[n].0, model.positions[n].1);
-                    if spot_grid.nearest(&positions, x, y, tol_px, &mut gate_scratch).is_some() {
+                    if spot_grid
+                        .nearest(&positions, x, y, tol_px, &mut gate_scratch)
+                        .is_some()
+                    {
                         hits += 1;
                     }
                 }
@@ -485,7 +560,13 @@ pub fn match_constellation_with(points: &[ImagePoint], model: &ModelIndex, param
                     if score >= candidate && verifications < params.max_verifications {
                         verifications += 1;
                         let pairs = scorer.pairs(&s, mid);
-                        let result = MatchResult { transform: s, pairs, score, anchor: mid, hypotheses };
+                        let result = MatchResult {
+                            transform: s,
+                            pairs,
+                            score,
+                            anchor: mid,
+                            hypotheses,
+                        };
                         if accept(&result) {
                             return Some(result);
                         }
@@ -499,7 +580,13 @@ pub fn match_constellation_with(points: &[ImagePoint], model: &ModelIndex, param
         return None;
     }
     let pairs = scorer.pairs(&s, mid);
-    Some(MatchResult { transform: s, pairs, score, anchor: mid, hypotheses })
+    Some(MatchResult {
+        transform: s,
+        pairs,
+        score,
+        anchor: mid,
+        hypotheses,
+    })
 }
 
 #[cfg(test)]
@@ -526,7 +613,12 @@ mod tests {
         let features = model_features(150, &mut rng);
         let index = ModelIndex::new(features.clone(), 8, 2.0);
         // Camera: 0.05 mm per px, turned 40 degrees, looking at a window.
-        let truth = Similarity { scale: 0.05, angle: 0.7, tx: 20.0, ty: 10.0 };
+        let truth = Similarity {
+            scale: 0.05,
+            angle: 0.7,
+            tx: 20.0,
+            ty: 10.0,
+        };
         let inv = truth.inverse();
         let mut points = Vec::new();
         for f in features.iter() {
@@ -543,11 +635,24 @@ mod tests {
         }
         let seen = points.len();
         for _ in 0..seen {
-            points.push(ImagePoint { x: rng.range(0.0, 640.0), y: rng.range(0.0, 480.0), area: 300.0, kind: FeatureKind::Island });
+            points.push(ImagePoint {
+                x: rng.range(0.0, 640.0),
+                y: rng.range(0.0, 480.0),
+                area: 300.0,
+                kind: FeatureKind::Island,
+            });
         }
-        let params = MatchParams { scale_range: (0.02, 0.1), early_exit: 0.4, ..MatchParams::default() };
+        let params = MatchParams {
+            scale_range: (0.02, 0.1),
+            early_exit: 0.4,
+            ..MatchParams::default()
+        };
         let result = match_constellation(&points, &index, &params).expect("a match");
-        assert!(result.pairs.len() >= seen * 8 / 10, "{} of {seen}", result.pairs.len());
+        assert!(
+            result.pairs.len() >= seen * 8 / 10,
+            "{} of {seen}",
+            result.pairs.len()
+        );
         let s = result.transform;
         assert!((s.scale - 0.05).abs() < 0.002, "{s:?}");
         assert!((s.angle - 0.7).abs() < 0.02, "{s:?}");
@@ -562,17 +667,30 @@ mod tests {
         let mut rng = Rng::new(4);
         let features = model_features(150, &mut rng);
         let index = ModelIndex::new(features.clone(), 8, 2.0);
-        let truth = Similarity { scale: 0.05, angle: -0.4, tx: 10.0, ty: 5.0 };
+        let truth = Similarity {
+            scale: 0.05,
+            angle: -0.4,
+            tx: 10.0,
+            ty: 5.0,
+        };
         let inv = truth.inverse();
         let points: Vec<ImagePoint> = features
             .iter()
             .filter_map(|f| {
                 let (x, y) = inv.apply(f.x, f.y);
-                ((0.0..640.0).contains(&x) && (0.0..480.0).contains(&y))
-                    .then(|| ImagePoint { x, y, area: f.area / 0.0025, kind: FeatureKind::Island })
+                ((0.0..640.0).contains(&x) && (0.0..480.0).contains(&y)).then(|| ImagePoint {
+                    x,
+                    y,
+                    area: f.area / 0.0025,
+                    kind: FeatureKind::Island,
+                })
             })
             .collect();
-        let params = MatchParams { scale_range: (0.02, 0.1), early_exit: 2.0, ..MatchParams::default() };
+        let params = MatchParams {
+            scale_range: (0.02, 0.1),
+            early_exit: 2.0,
+            ..MatchParams::default()
+        };
         let mut offered = 0;
         let result = match_constellation_with(&points, &index, &params, |m| {
             offered += 1;
@@ -590,29 +708,78 @@ mod tests {
         let features = model_features(120, &mut rng);
         let index = ModelIndex::new(features, 8, 2.0);
         let points: Vec<ImagePoint> = (0..40)
-            .map(|_| ImagePoint { x: rng.range(0.0, 640.0), y: rng.range(0.0, 480.0), area: 200.0, kind: FeatureKind::Island })
+            .map(|_| ImagePoint {
+                x: rng.range(0.0, 640.0),
+                y: rng.range(0.0, 480.0),
+                area: 200.0,
+                kind: FeatureKind::Island,
+            })
             .collect();
-        let params = MatchParams { scale_range: (0.02, 0.1), min_inliers: 12, max_hypotheses: 50_000, ..MatchParams::default() };
+        let params = MatchParams {
+            scale_range: (0.02, 0.1),
+            min_inliers: 12,
+            max_hypotheses: 50_000,
+            ..MatchParams::default()
+        };
         let result = match_constellation(&points, &index, &params);
-        assert!(result.is_none(), "{:?}", result.map(|r| (r.pairs.len(), r.score)));
+        assert!(
+            result.is_none(),
+            "{:?}",
+            result.map(|r| (r.pairs.len(), r.score))
+        );
     }
 
     #[test]
     fn grid_lookups() {
         let features = vec![
-            Feature { x: 0.0, y: 0.0, kind: FeatureKind::Island, area: 1.0, major: 1.0, minor: 1.0 },
-            Feature { x: 5.0, y: 0.0, kind: FeatureKind::Hole, area: 1.0, major: 1.0, minor: 1.0 },
-            Feature { x: 5.5, y: 0.0, kind: FeatureKind::Island, area: 1.0, major: 1.0, minor: 1.0 },
+            Feature {
+                x: 0.0,
+                y: 0.0,
+                kind: FeatureKind::Island,
+                area: 1.0,
+                major: 1.0,
+                minor: 1.0,
+            },
+            Feature {
+                x: 5.0,
+                y: 0.0,
+                kind: FeatureKind::Hole,
+                area: 1.0,
+                major: 1.0,
+                minor: 1.0,
+            },
+            Feature {
+                x: 5.5,
+                y: 0.0,
+                kind: FeatureKind::Island,
+                area: 1.0,
+                major: 1.0,
+                minor: 1.0,
+            },
         ];
         let index = ModelIndex::new(features, 2, 1.0);
         let mut scratch = Vec::new();
-        assert_eq!(index.nearest(5.1, 0.1, 1.0, None, &mut scratch).map(|r| r.0), Some(1));
-        assert_eq!(index.nearest(5.1, 0.1, 1.0, Some(FeatureKind::Island), &mut scratch).map(|r| r.0), Some(2));
+        assert_eq!(
+            index
+                .nearest(5.1, 0.1, 1.0, None, &mut scratch)
+                .map(|r| r.0),
+            Some(1)
+        );
+        assert_eq!(
+            index
+                .nearest(5.1, 0.1, 1.0, Some(FeatureKind::Island), &mut scratch)
+                .map(|r| r.0),
+            Some(2)
+        );
         assert!(index.nearest(20.0, 20.0, 1.0, None, &mut scratch).is_none());
         let (best, second) = index.nearest_two(5.1, 0.0, 1.0, None, &mut scratch);
         assert_eq!(best.map(|b| b.0), Some(1));
         assert!((second.unwrap() - 0.4).abs() < 1e-9);
         let grid = Grid::new(&[(0.0, 0.0), (3.0, 4.0)], 1.0);
-        assert_eq!(grid.nearest(&[(0.0, 0.0), (3.0, 4.0)], 2.5, 3.5, 1.0, &mut scratch).map(|r| r.0), Some(1));
+        assert_eq!(
+            grid.nearest(&[(0.0, 0.0), (3.0, 4.0)], 2.5, 3.5, 1.0, &mut scratch)
+                .map(|r| r.0),
+            Some(1)
+        );
     }
 }

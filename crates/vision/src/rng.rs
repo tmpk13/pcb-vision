@@ -53,7 +53,10 @@ mod tests {
         let mut b = Rng::new(7);
         let xs: Vec<f64> = (0..1000).map(|_| a.unit()).collect();
         assert!(xs.iter().all(|x| (0.0..1.0).contains(x)));
-        assert!(xs.iter().zip((0..1000).map(|_| b.unit())).all(|(x, y)| *x == y));
+        assert!(xs
+            .iter()
+            .zip((0..1000).map(|_| b.unit()))
+            .all(|(x, y)| *x == y));
         let mean = xs.iter().sum::<f64>() / xs.len() as f64;
         assert!((mean - 0.5).abs() < 0.05, "{mean}");
         let n: Vec<f64> = (0..2000).map(|_| a.normal()).collect();

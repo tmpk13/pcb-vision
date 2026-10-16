@@ -16,10 +16,12 @@ impl Point {
         Point { x, y }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn add(self, o: Point) -> Point {
         Point::new(self.x + o.x, self.y + o.y)
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn sub(self, o: Point) -> Point {
         Point::new(self.x - o.x, self.y - o.y)
     }
@@ -104,7 +106,10 @@ impl Rect {
     }
 
     pub fn center(self) -> Point {
-        Point::new((self.min.x + self.max.x) / 2.0, (self.min.y + self.max.y) / 2.0)
+        Point::new(
+            (self.min.x + self.max.x) / 2.0,
+            (self.min.y + self.max.y) / 2.0,
+        )
     }
 
     pub fn contains(self, p: Point) -> bool {
@@ -152,8 +157,17 @@ pub fn arc_from_points(start: Point, mid: Point, end: Point) -> Option<ArcGeom> 
     // mid lies on that way; otherwise the arc goes the other way round.
     let ccw_to_end = (end_angle - start_angle).rem_euclid(two_pi);
     let ccw_to_mid = (mid_angle - start_angle).rem_euclid(two_pi);
-    let sweep = if ccw_to_mid <= ccw_to_end { ccw_to_end } else { ccw_to_end - two_pi };
-    Some(ArcGeom { center, radius, start_angle, sweep })
+    let sweep = if ccw_to_mid <= ccw_to_end {
+        ccw_to_end
+    } else {
+        ccw_to_end - two_pi
+    };
+    Some(ArcGeom {
+        center,
+        radius,
+        start_angle,
+        sweep,
+    })
 }
 
 /// Points along the arc from start to end, the ends included, spaced so no
@@ -253,20 +267,33 @@ mod tests {
 
     #[test]
     fn arc_through_three_points() {
-        let arc = arc_from_points(Point::new(1.0, 0.0), Point::new(0.0, 1.0), Point::new(-1.0, 0.0))
-            .unwrap();
+        let arc = arc_from_points(
+            Point::new(1.0, 0.0),
+            Point::new(0.0, 1.0),
+            Point::new(-1.0, 0.0),
+        )
+        .unwrap();
         assert!(close(arc.center, Point::ZERO));
         assert!((arc.radius - 1.0).abs() < 1e-9);
         assert!((arc.sweep - std::f64::consts::PI).abs() < 1e-9);
-        let other = arc_from_points(Point::new(1.0, 0.0), Point::new(0.0, -1.0), Point::new(-1.0, 0.0))
-            .unwrap();
+        let other = arc_from_points(
+            Point::new(1.0, 0.0),
+            Point::new(0.0, -1.0),
+            Point::new(-1.0, 0.0),
+        )
+        .unwrap();
         assert!((other.sweep + std::f64::consts::PI).abs() < 1e-9);
         assert!(arc_from_points(Point::ZERO, Point::new(1.0, 1.0), Point::new(2.0, 2.0)).is_none());
     }
 
     #[test]
     fn arc_points_stay_on_circle() {
-        let pts = arc_points(Point::new(2.0, 0.0), Point::new(0.0, 2.0), Point::new(-2.0, 0.0), 0.01);
+        let pts = arc_points(
+            Point::new(2.0, 0.0),
+            Point::new(0.0, 2.0),
+            Point::new(-2.0, 0.0),
+            0.01,
+        );
         assert!(pts.len() > 10);
         for p in &pts {
             assert!((p.norm() - 2.0).abs() < 0.011, "{p:?}");
@@ -277,8 +304,16 @@ mod tests {
 
     #[test]
     fn polygon_area_and_centroid() {
-        let square = [Point::new(0.0, 0.0), Point::new(2.0, 0.0), Point::new(2.0, 2.0), Point::new(0.0, 2.0)];
+        let square = [
+            Point::new(0.0, 0.0),
+            Point::new(2.0, 0.0),
+            Point::new(2.0, 2.0),
+            Point::new(0.0, 2.0),
+        ];
         assert!((polygon_area(&square).abs() - 4.0).abs() < 1e-12);
-        assert!(close(polygon_centroid(&square).unwrap(), Point::new(1.0, 1.0)));
+        assert!(close(
+            polygon_centroid(&square).unwrap(),
+            Point::new(1.0, 1.0)
+        ));
     }
 }

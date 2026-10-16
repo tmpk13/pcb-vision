@@ -27,7 +27,16 @@ pub struct SynthParams {
 
 impl Default for SynthParams {
     fn default() -> SynthParams {
-        SynthParams { width: 1280, height: 720, blur: 1, noise: 4.0, gradient: 0.25, vignette: 0.2, background: [196, 176, 140], seed: 1 }
+        SynthParams {
+            width: 1280,
+            height: 720,
+            blur: 1,
+            noise: 4.0,
+            gradient: 0.25,
+            vignette: 0.2,
+            background: [196, 176, 140],
+            seed: 1,
+        }
     }
 }
 
@@ -35,10 +44,27 @@ impl Default for SynthParams {
 /// sees `center` at the middle of the frame, turned by `angle_deg`
 /// (counterclockwise on screen), at `px_per_mm`, with `tilt` adding
 /// perspective (fractions per pixel, small).
-pub fn camera(center: Point, angle_deg: f64, px_per_mm: f64, tilt: (f64, f64), width: usize, height: usize) -> Homography {
-    let s = Similarity { scale: px_per_mm, angle: -angle_deg.to_radians(), tx: 0.0, ty: 0.0 };
+pub fn camera(
+    center: Point,
+    angle_deg: f64,
+    px_per_mm: f64,
+    tilt: (f64, f64),
+    width: usize,
+    height: usize,
+) -> Homography {
+    let s = Similarity {
+        scale: px_per_mm,
+        angle: -angle_deg.to_radians(),
+        tx: 0.0,
+        ty: 0.0,
+    };
     let (cx, cy) = s.apply(center.x, center.y);
-    let base = Similarity { tx: width as f64 / 2.0 - cx, ty: height as f64 / 2.0 - cy, ..s }.to_homography();
+    let base = Similarity {
+        tx: width as f64 / 2.0 - cx,
+        ty: height as f64 / 2.0 - cy,
+        ..s
+    }
+    .to_homography();
     // Perspective about the frame center: w = 1 + tx (x - w/2) + ty (y - h/2).
     let (hw, hh) = (width as f64 / 2.0, height as f64 / 2.0);
     let persp = Homography([
@@ -101,10 +127,20 @@ fn board_mask(model: &BoardModel) -> Gray {
     paint.set_color_rgba8(255, 255, 255, 255);
     paint.anti_alias = false;
     match pb.finish() {
-        Some(path) => pixmap.fill_path(&path, &paint, FillRule::EvenOdd, Transform::identity(), None),
+        Some(path) => pixmap.fill_path(
+            &path,
+            &paint,
+            FillRule::EvenOdd,
+            Transform::identity(),
+            None,
+        ),
         None => pixmap.fill(tiny_skia::Color::WHITE),
     }
-    Gray { width: raster.width(), height: raster.height(), data: pixmap.data().chunks_exact(4).map(|px| px[0]).collect() }
+    Gray {
+        width: raster.width(),
+        height: raster.height(),
+        data: pixmap.data().chunks_exact(4).map(|px| px[0]).collect(),
+    }
 }
 
 /// A picture of the model's board as seen by a camera with the given view
@@ -124,7 +160,11 @@ pub fn synthesize(model: &BoardModel, view_to_px: &Homography, params: &SynthPar
             let (vx, vy) = inv.apply(x as f64 + 0.5, y as f64 + 0.5);
             let (rx, ry) = model.view_to_raster(Point::new(vx, vy));
             let inside = mask.sample(rx, ry).is_some_and(|v| v > 127.0);
-            let base = if inside { sample_rgb(raster, rx, ry).unwrap_or(bg) } else { bg };
+            let base = if inside {
+                sample_rgb(raster, rx, ry).unwrap_or(bg)
+            } else {
+                bg
+            };
             let light = 1.0 + params.gradient * ((x as f64 / w as f64) - 0.5);
             let dx = x as f64 - w as f64 / 2.0;
             let dy = y as f64 - h as f64 / 2.0;
@@ -154,7 +194,9 @@ fn box_blur(img: &Rgb, radius: usize) -> Rgb {
             let x0 = x.saturating_sub(radius);
             let x1 = (x + radius + 1).min(w);
             for c in 0..3 {
-                let sum: u32 = (x0..x1).map(|xx| img.data[(y * w + xx) * 3 + c] as u32).sum();
+                let sum: u32 = (x0..x1)
+                    .map(|xx| img.data[(y * w + xx) * 3 + c] as u32)
+                    .sum();
                 tmp[(y * w + x) * 3 + c] = (sum / (x1 - x0) as u32) as u16;
             }
         }
@@ -185,10 +227,16 @@ mod tests {
         // One mm along view x, with the camera turned 90 degrees
         // counterclockwise on screen, goes up the frame.
         let (x, y) = cam.apply(31.0, 20.0);
-        assert!((x - 320.0).abs() < 1e-9 && (y - 230.0).abs() < 1e-9, "{x} {y}");
+        assert!(
+            (x - 320.0).abs() < 1e-9 && (y - 230.0).abs() < 1e-9,
+            "{x} {y}"
+        );
         let tilted = camera(Point::new(30.0, 20.0), 0.0, 10.0, (1e-4, 0.0), 640, 480);
         let (x, y) = tilted.apply(30.0, 20.0);
-        assert!((x - 320.0).abs() < 1e-9 && (y - 240.0).abs() < 1e-9, "{x} {y}");
+        assert!(
+            (x - 320.0).abs() < 1e-9 && (y - 240.0).abs() < 1e-9,
+            "{x} {y}"
+        );
         // The map's input is the view frame, so the scale is read there.
         assert!((tilted.local_scale(30.0, 20.0) - 10.0).abs() < 1e-6);
     }

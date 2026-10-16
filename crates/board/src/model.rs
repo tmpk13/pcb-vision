@@ -56,11 +56,18 @@ pub enum PadShape {
     Circle,
     Rect,
     Oval,
-    RoundRect { ratio: f64 },
-    Trapezoid { delta: (f64, f64) },
+    RoundRect {
+        ratio: f64,
+    },
+    Trapezoid {
+        delta: (f64, f64),
+    },
     /// An anchor shape plus drawings in the pad's own frame, which turns
     /// with the pad.
-    Custom { anchor: Box<PadShape>, primitives: Vec<Primitive> },
+    Custom {
+        anchor: Box<PadShape>,
+        primitives: Vec<Primitive>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,13 +134,27 @@ pub struct ZoneFill {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Shape {
-    Line { start: Point, end: Point },
-    Arc { start: Point, mid: Point, end: Point },
-    Circle { center: Point, radius: f64 },
+    Line {
+        start: Point,
+        end: Point,
+    },
+    Arc {
+        start: Point,
+        mid: Point,
+        end: Point,
+    },
+    Circle {
+        center: Point,
+        radius: f64,
+    },
     /// A closed outline.
-    Poly { points: Vec<Point> },
+    Poly {
+        points: Vec<Point>,
+    },
     /// An open path.
-    Polyline { points: Vec<Point> },
+    Polyline {
+        points: Vec<Point>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -194,11 +215,25 @@ impl Shape {
     /// Move every point through `f`; the radius of a circle is kept.
     pub fn map(&self, f: impl Fn(Point) -> Point) -> Shape {
         match self {
-            Shape::Line { start, end } => Shape::Line { start: f(*start), end: f(*end) },
-            Shape::Arc { start, mid, end } => Shape::Arc { start: f(*start), mid: f(*mid), end: f(*end) },
-            Shape::Circle { center, radius } => Shape::Circle { center: f(*center), radius: *radius },
-            Shape::Poly { points } => Shape::Poly { points: points.iter().map(|p| f(*p)).collect() },
-            Shape::Polyline { points } => Shape::Polyline { points: points.iter().map(|p| f(*p)).collect() },
+            Shape::Line { start, end } => Shape::Line {
+                start: f(*start),
+                end: f(*end),
+            },
+            Shape::Arc { start, mid, end } => Shape::Arc {
+                start: f(*start),
+                mid: f(*mid),
+                end: f(*end),
+            },
+            Shape::Circle { center, radius } => Shape::Circle {
+                center: f(*center),
+                radius: *radius,
+            },
+            Shape::Poly { points } => Shape::Poly {
+                points: points.iter().map(|p| f(*p)).collect(),
+            },
+            Shape::Polyline { points } => Shape::Polyline {
+                points: points.iter().map(|p| f(*p)).collect(),
+            },
         }
     }
 
@@ -304,16 +339,34 @@ impl Board {
         };
         for pad in self.pads() {
             let half = pad.size.0.max(pad.size.1) / 2.0;
-            add(Some(Rect { min: pad.at, max: pad.at }.expand(half)));
+            add(Some(
+                Rect {
+                    min: pad.at,
+                    max: pad.at,
+                }
+                .expand(half),
+            ));
         }
         for t in &self.tracks {
             add(Rect::from_points([&t.start, &t.end]).map(|r| r.expand(t.width / 2.0)));
         }
         for a in &self.arcs {
-            add(Shape::Arc { start: a.start, mid: a.mid, end: a.end }.bbox().map(|r| r.expand(a.width / 2.0)));
+            add(Shape::Arc {
+                start: a.start,
+                mid: a.mid,
+                end: a.end,
+            }
+            .bbox()
+            .map(|r| r.expand(a.width / 2.0)));
         }
         for v in &self.vias {
-            add(Some(Rect { min: v.at, max: v.at }.expand(v.size / 2.0)));
+            add(Some(
+                Rect {
+                    min: v.at,
+                    max: v.at,
+                }
+                .expand(v.size / 2.0),
+            ));
         }
         for z in &self.zones {
             for o in &z.outlines {
@@ -337,7 +390,12 @@ impl Board {
             arcs: self.arcs.len(),
             vias: self.vias.len(),
             zone_outlines: self.zones.iter().map(|z| z.outlines.len()).sum(),
-            graphics: self.graphics.len() + self.footprints.iter().map(|f| f.graphics.len()).sum::<usize>(),
+            graphics: self.graphics.len()
+                + self
+                    .footprints
+                    .iter()
+                    .map(|f| f.graphics.len())
+                    .sum::<usize>(),
             bbox: self.bbox(),
         }
     }

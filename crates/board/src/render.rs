@@ -5,9 +5,7 @@
 //! picture is what a camera looking at that side sees.
 
 use serde::{Deserialize, Serialize};
-use tiny_skia::{
-    FillRule, LineCap, LineJoin, Paint, Path, PathBuilder, Pixmap, Stroke, Transform,
-};
+use tiny_skia::{FillRule, LineCap, LineJoin, Paint, Path, PathBuilder, Pixmap, Stroke, Transform};
 
 use crate::geom::{arc_points, Point, Rect};
 use crate::model::{Board, Graphic, Pad, PadShape, Primitive, Shape};
@@ -182,7 +180,12 @@ pub struct Layers {
 
 impl Default for Layers {
     fn default() -> Layers {
-        Layers { copper: true, holes: true, outline: true, silk: true }
+        Layers {
+            copper: true,
+            holes: true,
+            outline: true,
+            silk: true,
+        }
     }
 }
 
@@ -258,8 +261,22 @@ impl Raster {
     fn transform(side: Side, px_per_mm: f64, region: Rect) -> Transform {
         let s = px_per_mm as f32;
         match side {
-            Side::Front => Transform::from_row(s, 0.0, 0.0, s, (-region.min.x * px_per_mm) as f32, (-region.min.y * px_per_mm) as f32),
-            Side::Back => Transform::from_row(-s, 0.0, 0.0, s, (region.max.x * px_per_mm) as f32, (-region.min.y * px_per_mm) as f32),
+            Side::Front => Transform::from_row(
+                s,
+                0.0,
+                0.0,
+                s,
+                (-region.min.x * px_per_mm) as f32,
+                (-region.min.y * px_per_mm) as f32,
+            ),
+            Side::Back => Transform::from_row(
+                -s,
+                0.0,
+                0.0,
+                s,
+                (region.max.x * px_per_mm) as f32,
+                (-region.min.y * px_per_mm) as f32,
+            ),
         }
     }
 
@@ -274,7 +291,11 @@ impl Raster {
 
     /// Interleaved RGB of every pixel, row major.
     pub fn rgb(&self) -> Vec<u8> {
-        self.pixmap.data().chunks_exact(4).flat_map(|px| [px[0], px[1], px[2]]).collect()
+        self.pixmap
+            .data()
+            .chunks_exact(4)
+            .flat_map(|px| [px[0], px[1], px[2]])
+            .collect()
     }
 
     pub fn save_png(&self, path: impl AsRef<std::path::Path>) -> Result<(), String> {
@@ -290,7 +311,12 @@ fn paint(color: [u8; 4], anti_alias: bool) -> Paint<'static> {
 }
 
 fn stroke(width: f64) -> Stroke {
-    Stroke { width: width as f32, line_cap: LineCap::Round, line_join: LineJoin::Round, ..Stroke::default() }
+    Stroke {
+        width: width as f32,
+        line_cap: LineCap::Round,
+        line_join: LineJoin::Round,
+        ..Stroke::default()
+    }
 }
 
 fn polygon_path(points: &[Point], close: bool) -> Option<Path> {
@@ -313,7 +339,8 @@ fn round_rect_path(w: f64, h: f64, radius: f64) -> Option<Path> {
     let r = radius.min(w / 2.0).min(h / 2.0).max(0.0);
     let (x0, y0, x1, y1) = (-w / 2.0, -h / 2.0, w / 2.0, h / 2.0);
     if r <= 1e-9 {
-        return tiny_skia::Rect::from_ltrb(x0 as f32, y0 as f32, x1 as f32, y1 as f32).map(PathBuilder::from_rect);
+        return tiny_skia::Rect::from_ltrb(x0 as f32, y0 as f32, x1 as f32, y1 as f32)
+            .map(PathBuilder::from_rect);
     }
     // Quarter circles as cubics.
     let k = 0.552_284_75 * r;
@@ -365,7 +392,9 @@ pub fn outline_loops(board: &Board) -> Vec<Vec<Point>> {
                 loops.push(chain);
                 break;
             }
-            let next = open.iter().position(|c| c[0].dist(end) <= tolerance || c.last().unwrap().dist(end) <= tolerance);
+            let next = open.iter().position(|c| {
+                c[0].dist(end) <= tolerance || c.last().unwrap().dist(end) <= tolerance
+            });
             match next {
                 Some(i) => {
                     let mut piece = open.swap_remove(i);
@@ -391,13 +420,20 @@ struct Painter<'a> {
 impl Painter<'_> {
     fn fill(&mut self, path: &Path, color: [u8; 4], rule: FillRule, local: Transform) {
         let p = paint(color, self.anti_alias);
-        self.pixmap.fill_path(path, &p, rule, self.transform.pre_concat(local), None);
+        self.pixmap
+            .fill_path(path, &p, rule, self.transform.pre_concat(local), None);
     }
 
     fn stroke(&mut self, path: &Path, color: [u8; 4], width: f64, local: Transform) {
         let p = paint(color, self.anti_alias);
         let width = width.max(1.0 / self.px_per_mm);
-        self.pixmap.stroke_path(path, &p, &stroke(width), self.transform.pre_concat(local), None);
+        self.pixmap.stroke_path(
+            path,
+            &p,
+            &stroke(width),
+            self.transform.pre_concat(local),
+            None,
+        );
     }
 
     fn shape(&mut self, shape: &Shape, width: f64, filled: bool, color: [u8; 4], local: Transform) {
@@ -414,7 +450,9 @@ impl Painter<'_> {
                 }
             }
             Shape::Circle { center, radius } => {
-                if let Some(path) = PathBuilder::from_circle(center.x as f32, center.y as f32, *radius as f32) {
+                if let Some(path) =
+                    PathBuilder::from_circle(center.x as f32, center.y as f32, *radius as f32)
+                {
                     if filled {
                         self.fill(&path, color, FillRule::Winding, local);
                     }
@@ -452,7 +490,12 @@ impl Painter<'_> {
         match &pad.shape {
             PadShape::Custom { anchor, primitives } => {
                 self.pad_basic(anchor, w, h, color, local);
-                for Primitive { shape, width, filled } in primitives {
+                for Primitive {
+                    shape,
+                    width,
+                    filled,
+                } in primitives
+                {
                     self.shape(shape, *width, *filled, color, local);
                 }
             }
@@ -481,8 +524,15 @@ impl Painter<'_> {
         if drill.width <= 0.0 {
             return;
         }
-        let local = pad_transform(pad).pre_concat(Transform::from_translate(drill.offset.x as f32, drill.offset.y as f32));
-        if let Some(path) = round_rect_path(drill.width, drill.height, drill.width.min(drill.height) / 2.0) {
+        let local = pad_transform(pad).pre_concat(Transform::from_translate(
+            drill.offset.x as f32,
+            drill.offset.y as f32,
+        ));
+        if let Some(path) = round_rect_path(
+            drill.width,
+            drill.height,
+            drill.width.min(drill.height) / 2.0,
+        ) {
             self.fill(&path, color, FillRule::Winding, local);
         }
     }
@@ -492,7 +542,8 @@ impl Painter<'_> {
 /// negative angle for tiny-skia, whose positive rotation is clockwise on
 /// screen.
 fn pad_transform(pad: &Pad) -> Transform {
-    Transform::from_translate(pad.at.x as f32, pad.at.y as f32).pre_concat(Transform::from_rotate(-pad.rotation as f32))
+    Transform::from_translate(pad.at.x as f32, pad.at.y as f32)
+        .pre_concat(Transform::from_rotate(-pad.rotation as f32))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -503,11 +554,23 @@ enum CoverageLayer {
 
 /// White where the layer covers, black elsewhere, with anti-aliased edges
 /// when the style asks for them.
-fn coverage(board: &Board, opts: &RenderOptions, width: u32, height: u32, transform: Transform, which: CoverageLayer) -> Pixmap {
+fn coverage(
+    board: &Board,
+    opts: &RenderOptions,
+    width: u32,
+    height: u32,
+    transform: Transform,
+    which: CoverageLayer,
+) -> Pixmap {
     let mut pixmap = Pixmap::new(width, height).expect("raster size");
     pixmap.fill(tiny_skia::Color::BLACK);
     let white = [255, 255, 255, 255];
-    let mut painter = Painter { pixmap: &mut pixmap, transform, anti_alias: opts.style.anti_alias, px_per_mm: opts.px_per_mm };
+    let mut painter = Painter {
+        pixmap: &mut pixmap,
+        transform,
+        anti_alias: opts.style.anti_alias,
+        px_per_mm: opts.px_per_mm,
+    };
     let layer = match which {
         CoverageLayer::Copper => opts.side.copper_layer(),
         CoverageLayer::MaskOpenings => opts.side.mask_layer(),
@@ -521,13 +584,38 @@ fn coverage(board: &Board, opts: &RenderOptions, width: u32, height: u32, transf
     }
     if which == CoverageLayer::Copper {
         for t in board.tracks.iter().filter(|t| t.layer == layer) {
-            painter.shape(&Shape::Line { start: t.start, end: t.end }, t.width, false, white, Transform::identity());
+            painter.shape(
+                &Shape::Line {
+                    start: t.start,
+                    end: t.end,
+                },
+                t.width,
+                false,
+                white,
+                Transform::identity(),
+            );
         }
         for a in board.arcs.iter().filter(|a| a.layer == layer) {
-            painter.shape(&Shape::Arc { start: a.start, mid: a.mid, end: a.end }, a.width, false, white, Transform::identity());
+            painter.shape(
+                &Shape::Arc {
+                    start: a.start,
+                    mid: a.mid,
+                    end: a.end,
+                },
+                a.width,
+                false,
+                white,
+                Transform::identity(),
+            );
         }
-        for via in board.vias.iter().filter(|v| v.layers.iter().any(|l| l == layer)) {
-            if let Some(path) = PathBuilder::from_circle(via.at.x as f32, via.at.y as f32, (via.size / 2.0) as f32) {
+        for via in board
+            .vias
+            .iter()
+            .filter(|v| v.layers.iter().any(|l| l == layer))
+        {
+            if let Some(path) =
+                PathBuilder::from_circle(via.at.x as f32, via.at.y as f32, (via.size / 2.0) as f32)
+            {
                 painter.fill(&path, white, FillRule::Winding, Transform::identity());
             }
         }
@@ -543,7 +631,10 @@ fn coverage(board: &Board, opts: &RenderOptions, width: u32, height: u32, transf
 
 /// Draw one side of the board.
 pub fn render(board: &Board, opts: &RenderOptions) -> Raster {
-    let extent = board.bbox().unwrap_or(Rect { min: Point::ZERO, max: Point::new(10.0, 10.0) });
+    let extent = board.bbox().unwrap_or(Rect {
+        min: Point::ZERO,
+        max: Point::new(10.0, 10.0),
+    });
     let region = opts.region.unwrap_or_else(|| extent.expand(opts.margin_mm));
     let width = ((region.width() * opts.px_per_mm).ceil() as u32).clamp(1, 16384);
     let height = ((region.height() * opts.px_per_mm).ceil() as u32).clamp(1, 16384);
@@ -551,14 +642,32 @@ pub fn render(board: &Board, opts: &RenderOptions) -> Raster {
     let bg = opts.style.background;
     pixmap.fill(tiny_skia::Color::from_rgba8(bg[0], bg[1], bg[2], bg[3]));
     let transform = Raster::transform(opts.side, opts.px_per_mm, region);
-    let mut painter = Painter { pixmap: &mut pixmap, transform, anti_alias: opts.style.anti_alias, px_per_mm: opts.px_per_mm };
+    let mut painter = Painter {
+        pixmap: &mut pixmap,
+        transform,
+        anti_alias: opts.style.anti_alias,
+        px_per_mm: opts.px_per_mm,
+    };
     let style = &opts.style;
 
     // Substrate inside the outline, the board extent when no outline closes.
     let loops = outline_loops(board);
     if loops.is_empty() {
-        if let Some(path) = polygon_path(&[extent.min, Point::new(extent.max.x, extent.min.y), extent.max, Point::new(extent.min.x, extent.max.y)], true) {
-            painter.fill(&path, style.substrate, FillRule::Winding, Transform::identity());
+        if let Some(path) = polygon_path(
+            &[
+                extent.min,
+                Point::new(extent.max.x, extent.min.y),
+                extent.max,
+                Point::new(extent.min.x, extent.max.y),
+            ],
+            true,
+        ) {
+            painter.fill(
+                &path,
+                style.substrate,
+                FillRule::Winding,
+                Transform::identity(),
+            );
         }
     } else {
         let mut pb = PathBuilder::new();
@@ -568,7 +677,12 @@ pub fn render(board: &Board, opts: &RenderOptions) -> Raster {
             }
         }
         if let Some(path) = pb.finish() {
-            painter.fill(&path, style.substrate, FillRule::EvenOdd, Transform::identity());
+            painter.fill(
+                &path,
+                style.substrate,
+                FillRule::EvenOdd,
+                Transform::identity(),
+            );
         }
     }
 
@@ -579,7 +693,14 @@ pub fn render(board: &Board, opts: &RenderOptions) -> Raster {
         let copper = coverage(board, opts, width, height, transform, CoverageLayer::Copper);
         let openings = match opts.finish {
             Finish::Bare => None,
-            Finish::Masked => Some(coverage(board, opts, width, height, transform, CoverageLayer::MaskOpenings)),
+            Finish::Masked => Some(coverage(
+                board,
+                opts,
+                width,
+                height,
+                transform,
+                CoverageLayer::MaskOpenings,
+            )),
         };
         let data = painter.pixmap.data_mut();
         let c = style.copper;
@@ -603,7 +724,9 @@ pub fn render(board: &Board, opts: &RenderOptions) -> Raster {
             painter.pad_hole(pad, style.hole);
         }
         for via in &board.vias {
-            if let Some(path) = PathBuilder::from_circle(via.at.x as f32, via.at.y as f32, (via.drill / 2.0) as f32) {
+            if let Some(path) =
+                PathBuilder::from_circle(via.at.x as f32, via.at.y as f32, (via.drill / 2.0) as f32)
+            {
                 painter.fill(&path, style.hole, FillRule::Winding, Transform::identity());
             }
         }
@@ -620,12 +743,23 @@ pub fn render(board: &Board, opts: &RenderOptions) -> Raster {
     if opts.layers.outline {
         if let Some(color) = style.outline {
             for g in board.graphics_on("Edge.Cuts") {
-                painter.shape(&g.shape, g.width.max(1.5 / opts.px_per_mm), false, color, Transform::identity());
+                painter.shape(
+                    &g.shape,
+                    g.width.max(1.5 / opts.px_per_mm),
+                    false,
+                    color,
+                    Transform::identity(),
+                );
             }
         }
     }
 
-    Raster { pixmap, side: opts.side, px_per_mm: opts.px_per_mm, region }
+    Raster {
+        pixmap,
+        side: opts.side,
+        px_per_mm: opts.px_per_mm,
+        region,
+    }
 }
 
 #[cfg(test)]
@@ -681,7 +815,8 @@ mod tests {
     #[test]
     fn masked_finish_hides_covered_copper() {
         let board = parse_board(BOARD).unwrap();
-        let mut opts = RenderOptions::new(Side::Back, 10.0, Style::copper_mask()).with_finish(Finish::Masked);
+        let mut opts =
+            RenderOptions::new(Side::Back, 10.0, Style::copper_mask()).with_finish(Finish::Masked);
         opts.margin_mm = 1.0;
         let back = render(&board, &opts);
         // The back track has no mask opening; pad 1 opens both sides.

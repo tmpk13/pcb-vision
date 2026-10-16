@@ -10,32 +10,70 @@ use crate::blobs::{detect_with, BlobParams, Polarity, Segmentation};
 use crate::image::{Channel, Gray, Rgb};
 
 use crate::matcher::{match_constellation_with, ImagePoint, MatchParams, ModelIndex};
-use crate::model::{view_of, BoardModel};
+use crate::model::{view_of, BoardModel, FeatureKind};
 use crate::refine::{initial_from_pairs, kind_for_polarity, refine, Fit, RefineParams};
 use crate::xform::Homography;
 
-/// One way of seeing spots: which scalar, and how it is split.
+/// One way of seeing spots: which scalar, how it is split, and whether
+/// the spots are the bright or the dark side of the split.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Look {
     pub channel: Channel,
     pub segmentation: Segmentation,
+    pub polarity: Polarity,
 }
 
 impl Look {
     /// Bright pads against dark mask or substrate.
-    pub const BRIGHT_SPOTS: Look = Look { channel: Channel::Luma, segmentation: Segmentation::Local };
+    pub const BRIGHT_SPOTS: Look = Look {
+        channel: Channel::Luma,
+        segmentation: Segmentation::Local,
+        polarity: Polarity::Bright,
+    };
     /// Copper, gold or not, against everything else.
-    pub const COPPER: Look = Look { channel: Channel::Chroma, segmentation: Segmentation::Global };
+    pub const COPPER: Look = Look {
+        channel: Channel::Chroma,
+        segmentation: Segmentation::Global,
+        polarity: Polarity::Bright,
+    };
+    /// Drilled holes and vias as dark spots, for a side that is mostly one
+    /// pour.
+    pub const HOLES: Look = Look {
+        channel: Channel::Luma,
+        segmentation: Segmentation::Local,
+        polarity: Polarity::Dark,
+    };
 
+    /// The kind of model feature the look finds.
+    pub fn kind(&self) -> FeatureKind {
+        kind_for_polarity(self.polarity == Polarity::Bright)
+    }
+
+    /// "channel-segmentation[-polarity]", bright when the polarity is left
+    /// out.
     pub fn parse(text: &str) -> Option<Look> {
-        let (c, s) = text.split_once('-')?;
-        Some(Look { channel: Channel::parse(c)?, segmentation: Segmentation::parse(s)? })
+        let mut parts = text.split('-');
+        let channel = Channel::parse(parts.next()?)?;
+        let segmentation = Segmentation::parse(parts.next()?)?;
+        let polarity = match parts.next() {
+            Some(p) => Polarity::parse(p)?,
+            None => Polarity::Bright,
+        };
+        Some(Look {
+            channel,
+            segmentation,
+            polarity,
+        })
     }
 }
 
 impl std::fmt::Display for Look {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}-{}", self.channel, self.segmentation)
+        write!(
+            f,
+            "{}-{}-{}",
+            self.channel, self.segmentation, self.polarity
+        )
     }
 }
 
@@ -46,7 +84,6 @@ pub struct LocalizerConfig {
     /// Ways of seeing, tried in turn after failed searches until one
     /// locks.
     pub looks: Vec<Look>,
-    pub polarity: Polarity,
     /// Sampling of the board model, px per mm.
     pub model_px_per_mm: f64,
     /// Frames are shrunk to at most this width before detection.
@@ -78,8 +115,7 @@ impl Default for LocalizerConfig {
         LocalizerConfig {
             side: Side::Front,
             finish: Finish::Bare,
-            looks: vec![Look::BRIGHT_SPOTS, Look::COPPER],
-            polarity: Polarity::Bright,
+            looks: vec![Look::BRIGHT_SPOTS, Look::COPPER, Look::HOLES],
             model_px_per_mm: 20.0,
             work_width: 1024,
             blob_radius: 0.05,
@@ -89,7 +125,7 @@ impl Default for LocalizerConfig {
             min_fill: 0.3,
             matching: MatchParams::default(),
             refine: RefineParams::default(),
-            track_tolerance: 0.6,
+            track_tolerance: 0.4,
             min_coverage: 0.25,
             min_explained: 0.2,
             lost_after: 5,
@@ -171,12 +207,30 @@ pub struct Localizer {
 impl Localizer {
     pub fn new(board: &Board, config: LocalizerConfig) -> Localizer {
         let model = BoardModel::build(board, config.side, config.finish, config.model_px_per_mm);
-        let index = ModelIndex::new(model.features.clone(), config.matching.neighbors, config.matching.tolerance.max(0.5) * 2.0);
-        Localizer { config, model, index, look: 0, state: State::Lost, last: None, misses: 0, scale_seen: None, failed_searches: 0 }
+        let index = ModelIndex::new(
+            model.features.clone(),
+            config.matching.neighbors,
+            config.matching.tolerance.max(0.5) * 2.0,
+        );
+        Localizer {
+            config,
+            model,
+            index,
+            look: 0,
+            state: State::Lost,
+            last: None,
+            misses: 0,
+            scale_seen: None,
+            failed_searches: 0,
+        }
     }
 
     pub fn current_look(&self) -> Look {
-        self.config.looks.get(self.look).copied().unwrap_or(Look::BRIGHT_SPOTS)
+        self.config
+            .looks
+            .get(self.look)
+            .copied()
+            .unwrap_or(Look::BRIGHT_SPOTS)
     }
 
     pub fn state(&self) -> State {
@@ -195,7 +249,7 @@ impl Localizer {
     fn blob_params(&self, width: usize, height: usize) -> BlobParams {
         let look = self.current_look();
         BlobParams {
-            polarity: self.config.polarity,
+            polarity: look.polarity,
             radius: ((width as f64 * self.config.blob_radius) as usize).max(4),
             threshold: match look.segmentation {
                 Segmentation::Local => self.config.threshold,
@@ -206,7 +260,11 @@ impl Localizer {
             min_fill: self.config.min_fill,
             keep_border: false,
             // Chroma below this is not copper or gold under any light.
-            global_floor: if look.channel == Channel::Chroma { 90 } else { 0 },
+            global_floor: if look.channel == Channel::Chroma {
+                90
+            } else {
+                0
+            },
         }
     }
 
@@ -216,7 +274,7 @@ impl Localizer {
         let Some(inv) = h.inverse() else {
             return usize::MAX;
         };
-        let kind = kind_for_polarity(self.config.polarity == Polarity::Bright);
+        let kind = self.current_look().kind();
         let (w, h) = (width as f64, height as f64);
         self.index
             .features
@@ -231,7 +289,13 @@ impl Localizer {
 
     /// Whether a fit explains enough of what the model says should be
     /// visible, and enough of what was seen where it says the board is.
-    fn covered(&self, fit: &Fit, spots: &[ImagePoint], width: usize, height: usize) -> (bool, usize) {
+    fn covered(
+        &self,
+        fit: &Fit,
+        spots: &[ImagePoint],
+        width: usize,
+        height: usize,
+    ) -> (bool, usize) {
         let expected = self.expected_in_frame(&fit.h, width, height);
         let bbox = self.model.bbox.expand(1.0);
         let on_board = spots
@@ -251,17 +315,26 @@ impl Localizer {
     /// Spots in a frame already shrunk to work size, in work pixels.
     pub fn detect(&self, channel: &Gray) -> Vec<ImagePoint> {
         let params = self.blob_params(channel.width, channel.height);
-        let kind = kind_for_polarity(self.config.polarity == Polarity::Bright);
+        let kind = self.current_look().kind();
         detect_with(channel, &params, self.current_look().segmentation)
             .into_iter()
-            .map(|b| ImagePoint { x: b.x, y: b.y, area: b.area, kind })
+            .map(|b| ImagePoint {
+                x: b.x,
+                y: b.y,
+                area: b.area,
+                kind,
+            })
             .collect()
     }
 
     pub fn process(&mut self, frame: &Rgb) -> Observation {
         let start = Instant::now();
         let factor = frame.factor_for(self.config.work_width);
-        let small = if factor > 1 { frame.downscale(factor) } else { frame.clone() };
+        let small = if factor > 1 {
+            frame.downscale(factor)
+        } else {
+            frame.clone()
+        };
         let channel = small.channel(self.current_look().channel);
         let prepare_ms = start.elapsed().as_secs_f64() * 1000.0;
         let mut obs = self.process_channel(&channel, factor as f64, frame.width, frame.height);
@@ -272,11 +345,20 @@ impl Localizer {
 
     /// The pipeline on a work size channel image; `factor` is how many
     /// full size pixels one work pixel spans.
-    pub fn process_channel(&mut self, channel: &Gray, factor: f64, full_width: usize, full_height: usize) -> Observation {
+    pub fn process_channel(
+        &mut self,
+        channel: &Gray,
+        factor: f64,
+        full_width: usize,
+        full_height: usize,
+    ) -> Observation {
         let start = Instant::now();
         let spots = self.detect(channel);
         let detect_ms = start.elapsed().as_secs_f64() * 1000.0;
-        let mut timing = Timing { detect_ms, ..Timing::default() };
+        let mut timing = Timing {
+            detect_ms,
+            ..Timing::default()
+        };
         let mut searched = false;
         let mut hypotheses = 0;
         let mut fit: Option<(Fit, usize)> = None;
@@ -285,8 +367,13 @@ impl Localizer {
         // Track first.
         if let Some(last) = self.last {
             let t = Instant::now();
-            let params = RefineParams { tolerance: self.config.track_tolerance, perspective: 0.0, ..self.config.refine.clone() };
-            if let Some(f) = refine(&spots, &self.index, &last, None, &params) {
+            let params = RefineParams {
+                tolerance: self.config.track_tolerance,
+                perspective: 0.0,
+                ..self.config.refine.clone()
+            };
+            let center = (width as f64 / 2.0, height as f64 / 2.0);
+            if let Some(f) = refine(&spots, &self.index, &last, Some(center), &params) {
                 let (ok, expected) = self.covered(&f, &spots, width, height);
                 if ok {
                     fit = Some((f, expected));
@@ -294,12 +381,16 @@ impl Localizer {
             }
             timing.refine_ms += t.elapsed().as_secs_f64() * 1000.0;
         }
-        if fit.is_none() && (self.state == State::Lost || self.misses + 1 >= self.config.lost_after) {
+        if fit.is_none() && (self.state == State::Lost || self.misses + 1 >= self.config.lost_after)
+        {
             searched = true;
             let t = Instant::now();
             let mut params = self.config.matching.clone();
             if let Some(seen) = self.scale_seen.filter(|_| self.failed_searches < 3) {
-                params.scale_range = ((seen / 1.5).max(params.scale_range.0), (seen * 1.5).min(params.scale_range.1));
+                params.scale_range = (
+                    (seen / 1.5).max(params.scale_range.0),
+                    (seen * 1.5).min(params.scale_range.1),
+                );
             }
             // A candidate is refined and accepted when it explains enough
             // of what should be in view; the first such one ends the search.
@@ -307,7 +398,13 @@ impl Localizer {
             let found = match_constellation_with(&spots, &self.index, &params, |m| {
                 let init = initial_from_pairs(&spots, &self.index, &m.pairs, &self.config.refine)
                     .unwrap_or_else(|| m.transform.to_homography());
-                match refine(&spots, &self.index, &init, Some(m.anchor), &self.config.refine) {
+                match refine(
+                    &spots,
+                    &self.index,
+                    &init,
+                    Some(m.anchor),
+                    &self.config.refine,
+                ) {
                     Some(f) => {
                         let (ok, expected) = self.covered(&f, &spots, width, height);
                         if ok {
@@ -325,9 +422,16 @@ impl Localizer {
             fit = verified;
             if fit.is_none() {
                 if let Some(m) = found {
-                    let init = initial_from_pairs(&spots, &self.index, &m.pairs, &self.config.refine)
-                        .unwrap_or_else(|| m.transform.to_homography());
-                    if let Some(f) = refine(&spots, &self.index, &init, Some(m.anchor), &self.config.refine) {
+                    let init =
+                        initial_from_pairs(&spots, &self.index, &m.pairs, &self.config.refine)
+                            .unwrap_or_else(|| m.transform.to_homography());
+                    if let Some(f) = refine(
+                        &spots,
+                        &self.index,
+                        &init,
+                        Some(m.anchor),
+                        &self.config.refine,
+                    ) {
                         let (ok, expected) = self.covered(&f, &spots, width, height);
                         if ok {
                             fit = Some((f, expected));
@@ -350,7 +454,17 @@ impl Localizer {
                 let cx = channel.width as f64 / 2.0;
                 let cy = channel.height as f64 / 2.0;
                 self.scale_seen = Some(f.h.local_scale(cx, cy));
-                let pose = self.pose_from(&f.h, factor, full_width, full_height, f.pairs.len(), spots.len(), expected, f.rms, f.projective);
+                let pose = self.pose_from(
+                    &f.h,
+                    factor,
+                    full_width,
+                    full_height,
+                    f.pairs.len(),
+                    spots.len(),
+                    expected,
+                    f.rms,
+                    f.projective,
+                );
                 (Some(pose), f.pairs)
             }
             None => {
@@ -369,7 +483,15 @@ impl Localizer {
             self.look = (self.look + 1) % self.config.looks.len();
         }
         timing.total_ms = start.elapsed().as_secs_f64() * 1000.0;
-        let spots_full = spots.iter().map(|p| ImagePoint { x: p.x * factor, y: p.y * factor, area: p.area * factor * factor, kind: p.kind }).collect();
+        let spots_full = spots
+            .iter()
+            .map(|p| ImagePoint {
+                x: p.x * factor,
+                y: p.y * factor,
+                area: p.area * factor * factor,
+                kind: p.kind,
+            })
+            .collect();
         Observation {
             state: self.state,
             pose,
@@ -385,7 +507,18 @@ impl Localizer {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn pose_from(&self, work_to_view: &Homography, factor: f64, width: usize, height: usize, inliers: usize, spots: usize, expected: usize, rms_mm: f64, projective: bool) -> Pose {
+    fn pose_from(
+        &self,
+        work_to_view: &Homography,
+        factor: f64,
+        width: usize,
+        height: usize,
+        inliers: usize,
+        spots: usize,
+        expected: usize,
+        rms_mm: f64,
+        projective: bool,
+    ) -> Pose {
         let image_to_view = work_to_view.pre_scale(1.0 / factor);
         let mirror = match self.config.side {
             Side::Front => Homography::identity(),
@@ -413,7 +546,12 @@ impl Localizer {
             center,
             angle_deg: -image_to_view.local_angle(cx, cy).to_degrees(),
             mm_per_px: image_to_view.local_scale(cx, cy),
-            corners: [corner(0.0, 0.0), corner(w, 0.0), corner(w, h), corner(0.0, h)],
+            corners: [
+                corner(0.0, 0.0),
+                corner(w, 0.0),
+                corner(w, h),
+                corner(0.0, h),
+            ],
         }
     }
 }

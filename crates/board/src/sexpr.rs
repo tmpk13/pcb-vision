@@ -107,7 +107,10 @@ impl Reader<'_> {
 impl Sexpr {
     /// Read one expression; anything but whitespace after it is an error.
     pub fn parse(text: &str) -> Result<Sexpr, SexprError> {
-        let mut reader = Reader { bytes: text.as_bytes(), pos: 0 };
+        let mut reader = Reader {
+            bytes: text.as_bytes(),
+            pos: 0,
+        };
         reader.skip_space();
         if reader.pos >= reader.bytes.len() {
             return Err(SexprError::Empty);
@@ -226,10 +229,19 @@ mod tests {
 
     #[test]
     fn rejects_broken_input() {
-        assert!(matches!(Sexpr::parse("(a (b)"), Err(SexprError::UnexpectedEnd(_))));
-        assert!(matches!(Sexpr::parse("(a)) "), Err(SexprError::Trailing(_))));
+        assert!(matches!(
+            Sexpr::parse("(a (b)"),
+            Err(SexprError::UnexpectedEnd(_))
+        ));
+        assert!(matches!(
+            Sexpr::parse("(a)) "),
+            Err(SexprError::Trailing(_))
+        ));
         assert!(matches!(Sexpr::parse("  "), Err(SexprError::Empty)));
-        assert!(matches!(Sexpr::parse("(a \"x)"), Err(SexprError::UnterminatedString(_))));
+        assert!(matches!(
+            Sexpr::parse("(a \"x)"),
+            Err(SexprError::UnterminatedString(_))
+        ));
     }
 
     #[test]

@@ -7,6 +7,12 @@
 //! small circle around that anchor and the circle grows with each fit: a
 //! similarity on a few pairs, an affine map once there are more, and a
 //! homography once they are spread across the frame.
+//!
+//! A map carried over from the last frame can be off by more than the
+//! pitch of a pad array, which would pair every pad with its neighbor, so
+//! it is first re-anchored: the spot nearest the anchor is tried against
+//! each feature near where the map puts it, and the shift that puts the
+//! most of its neighbors onto features wins.
 
 use serde::{Deserialize, Serialize};
 
@@ -39,6 +45,9 @@ pub struct RefineParams {
     /// Allowed millimeters per pixel anywhere in the frame.
     pub scale_range: (f64, f64),
     pub min_pairs: usize,
+    /// How far, in mm, the re-anchoring looks for the feature of the spot
+    /// nearest the anchor; zero turns it off.
+    pub reanchor_radius: f64,
 }
 
 impl Default for RefineParams {
@@ -51,6 +60,7 @@ impl Default for RefineParams {
             min_extent: 60.0,
             scale_range: (0.005, 0.5),
             min_pairs: 6,
+            reanchor_radius: 2.0,
         }
     }
 }
@@ -59,7 +69,14 @@ impl Default for RefineParams {
 /// feature is within the tolerance and clearly nearer than any other. With
 /// `growth`, the tolerance widens by that much per millimeter of view
 /// distance from the anchor pixel.
-pub fn associate(points: &[ImagePoint], model: &ModelIndex, h: &Homography, tolerance: f64, same_kind: bool, growth: Option<((f64, f64), f64)>) -> Vec<(usize, usize)> {
+pub fn associate(
+    points: &[ImagePoint],
+    model: &ModelIndex,
+    h: &Homography,
+    tolerance: f64,
+    same_kind: bool,
+    growth: Option<((f64, f64), f64)>,
+) -> Vec<(usize, usize)> {
     let mut scratch = Vec::new();
     let mut taken = vec![false; model.len()];
     let mut out = Vec::new();
@@ -87,10 +104,19 @@ pub fn associate(points: &[ImagePoint], model: &ModelIndex, h: &Homography, tole
     out
 }
 
-fn pairs_to_coords(points: &[ImagePoint], model: &ModelIndex, pairs: &[(usize, usize)]) -> Vec<Pair> {
+fn pairs_to_coords(
+    points: &[ImagePoint],
+    model: &ModelIndex,
+    pairs: &[(usize, usize)],
+) -> Vec<Pair> {
     pairs
         .iter()
-        .map(|&(i, f)| ((points[i].x, points[i].y), (model.features[f].x, model.features[f].y)))
+        .map(|&(i, f)| {
+            (
+                (points[i].x, points[i].y),
+                (model.features[f].x, model.features[f].y),
+            )
+        })
         .collect()
 }
 
@@ -111,7 +137,9 @@ fn spread_ok(coords: &[Pair], min_extent: f64) -> bool {
     }
     let tr = (sxx + syy) / n;
     let det = (sxx * syy - sxy * sxy) / (n * n);
-    let small = (tr / 2.0 - ((tr * tr / 4.0) - det).max(0.0).sqrt()).max(0.0).sqrt();
+    let small = (tr / 2.0 - ((tr * tr / 4.0) - det).max(0.0).sqrt())
+        .max(0.0)
+        .sqrt();
     small * 4.0 >= min_extent
 }
 
@@ -134,7 +162,12 @@ fn sane(h: &Homography, points: &[ImagePoint], scale_range: (f64, f64)) -> bool 
 /// one: a similarity, an affine map, or a homography. Missing a real tilt
 /// costs millimeters at the far side of the frame; projective terms fitted
 /// to noise cost a fraction of that, and the weighted fit keeps them small.
-fn fit_pairs(points: &[ImagePoint], model: &ModelIndex, pairs: &[(usize, usize)], params: &RefineParams) -> Option<(Homography, bool, f64)> {
+fn fit_pairs(
+    points: &[ImagePoint],
+    model: &ModelIndex,
+    pairs: &[(usize, usize)],
+    params: &RefineParams,
+) -> Option<(Homography, bool, f64)> {
     let coords = pairs_to_coords(points, model, pairs);
     let sane_here = |c: &Homography| sane(c, points, params.scale_range);
     let similarity = Similarity::fit(&coords)?.to_homography();
@@ -171,32 +204,116 @@ fn spread_ok_n(coords: &[Pair], min_extent: f64, min_count: usize) -> bool {
         }
         let tr = (sxx + syy) / n;
         let det = (sxx * syy - sxy * sxy) / (n * n);
-        let small = (tr / 2.0 - ((tr * tr / 4.0) - det).max(0.0).sqrt()).max(0.0).sqrt();
+        let small = (tr / 2.0 - ((tr * tr / 4.0) - det).max(0.0).sqrt())
+            .max(0.0)
+            .sqrt();
         small * 4.0 >= min_extent
     }
 }
 
 /// A starting map from pairs a search produced, when they allow a
 /// projective fit; otherwise `None` and the search's own transform serves.
-pub fn initial_from_pairs(points: &[ImagePoint], model: &ModelIndex, pairs: &[(usize, usize)], params: &RefineParams) -> Option<Homography> {
+pub fn initial_from_pairs(
+    points: &[ImagePoint],
+    model: &ModelIndex,
+    pairs: &[(usize, usize)],
+    params: &RefineParams,
+) -> Option<Homography> {
     let (h, projective, _) = fit_pairs(points, model, pairs, params)?;
     projective.then_some(h)
 }
 
+/// The map shifted in its output so that the spot nearest the anchor lands
+/// on the feature that makes the most of its neighbors land on features.
+fn reanchor(
+    points: &[ImagePoint],
+    model: &ModelIndex,
+    h: &Homography,
+    anchor: (f64, f64),
+    params: &RefineParams,
+) -> Homography {
+    if params.reanchor_radius <= 0.0 || points.len() < 4 {
+        return *h;
+    }
+    let mut order: Vec<usize> = (0..points.len()).collect();
+    order.sort_by(|&a, &b| {
+        let da = (points[a].x - anchor.0).hypot(points[a].y - anchor.1);
+        let db = (points[b].x - anchor.0).hypot(points[b].y - anchor.1);
+        da.partial_cmp(&db).unwrap()
+    });
+    let first = &points[order[0]];
+    let neighbors: Vec<&ImagePoint> = order.iter().skip(1).take(12).map(|&i| &points[i]).collect();
+    let (px, py) = h.apply(first.x, first.y);
+    let kind = if params.same_kind {
+        Some(first.kind)
+    } else {
+        None
+    };
+    let mut scratch = Vec::new();
+    let mut candidates = Vec::new();
+    model.grid_candidates(px, py, params.reanchor_radius, &mut candidates);
+    let mut best: Option<(usize, f64, (f64, f64))> = None;
+    for &c in &candidates {
+        let f = &model.features[c as usize];
+        if kind.is_some_and(|k| f.kind != k) || (f.x - px).hypot(f.y - py) > params.reanchor_radius
+        {
+            continue;
+        }
+        let shift = (f.x - px, f.y - py);
+        let mut hits = 0;
+        let mut error = 0.0;
+        for n in &neighbors {
+            let (x, y) = h.apply(n.x, n.y);
+            let nk = if params.same_kind { Some(n.kind) } else { None };
+            if let Some((_, d)) =
+                model.nearest(x + shift.0, y + shift.1, params.tolerance, nk, &mut scratch)
+            {
+                hits += 1;
+                error += d;
+            }
+        }
+        let better = match best {
+            None => true,
+            Some((bh, be, _)) => hits > bh || (hits == bh && error < be),
+        };
+        if better {
+            best = Some((hits, error, shift));
+        }
+    }
+    match best {
+        Some((hits, _, shift)) if hits >= 2 && (shift.0.abs() > 1e-9 || shift.1.abs() > 1e-9) => {
+            let t = Homography([1.0, 0.0, shift.0, 0.0, 1.0, shift.1, 0.0, 0.0, 1.0]);
+            h.then(&t)
+        }
+        _ => *h,
+    }
+}
+
 /// `anchor` is the image point where `init` is most trusted; the frame's
 /// spot centroid when unknown.
-pub fn refine(points: &[ImagePoint], model: &ModelIndex, init: &Homography, anchor: Option<(f64, f64)>, params: &RefineParams) -> Option<Fit> {
-    let mut h = *init;
-    let mut fit: Option<Fit> = None;
+pub fn refine(
+    points: &[ImagePoint],
+    model: &ModelIndex,
+    init: &Homography,
+    anchor: Option<(f64, f64)>,
+    params: &RefineParams,
+) -> Option<Fit> {
     let anchor = anchor.unwrap_or_else(|| {
         let n = points.len().max(1) as f64;
-        (points.iter().map(|p| p.x).sum::<f64>() / n, points.iter().map(|p| p.y).sum::<f64>() / n)
+        (
+            points.iter().map(|p| p.x).sum::<f64>() / n,
+            points.iter().map(|p| p.y).sum::<f64>() / n,
+        )
     });
-    let mut distances: Vec<f64> = points.iter().map(|p| (p.x - anchor.0).hypot(p.y - anchor.1)).collect();
+    let mut h = reanchor(points, model, init, anchor, params);
+    let mut fit: Option<Fit> = None;
+    let mut distances: Vec<f64> = points
+        .iter()
+        .map(|p| (p.x - anchor.0).hypot(p.y - anchor.1))
+        .collect();
     let frame_radius = distances.iter().cloned().fold(0.0, f64::max);
-    // Start with the dozen spots nearest the anchor, or everything when
-    // perspective is not expected.
-    let mut radius = if params.perspective > 0.0 && distances.len() > 12 {
+    // Start with the dozen spots nearest the anchor.
+    let mut radius = if distances.len() > 12 {
         distances.sort_by(|a, b| a.partial_cmp(b).unwrap());
         distances[11].max(1.0)
     } else {
@@ -214,8 +331,19 @@ pub fn refine(points: &[ImagePoint], model: &ModelIndex, init: &Homography, anch
                 within_index.push(i);
             }
         }
-        let growth = if params.perspective > 0.0 { Some((anchor, params.perspective)) } else { None };
-        let local = associate(&within, model, &h, params.tolerance * 2.0, params.same_kind, growth);
+        let growth = if params.perspective > 0.0 {
+            Some((anchor, params.perspective))
+        } else {
+            None
+        };
+        let local = associate(
+            &within,
+            model,
+            &h,
+            params.tolerance * 1.5,
+            params.same_kind,
+            growth,
+        );
         let pairs: Vec<(usize, usize)> = local.iter().map(|&(i, f)| (within_index[i], f)).collect();
         if pairs.len() < 3 {
             break;
@@ -224,7 +352,12 @@ pub fn refine(points: &[ImagePoint], model: &ModelIndex, init: &Homography, anch
             break;
         };
         h = candidate;
-        fit = Some(Fit { h, pairs, rms, projective });
+        fit = Some(Fit {
+            h,
+            pairs,
+            rms,
+            projective,
+        });
         if radius >= frame_radius {
             break;
         }
@@ -249,7 +382,12 @@ pub fn refine(points: &[ImagePoint], model: &ModelIndex, init: &Homography, anch
             break;
         };
         h = candidate;
-        fit = Some(Fit { h, pairs, rms, projective });
+        fit = Some(Fit {
+            h,
+            pairs,
+            rms,
+            projective,
+        });
     }
     fit.filter(|f| f.pairs.len() >= params.min_pairs)
 }
@@ -274,26 +412,64 @@ mod tests {
     fn tightens_a_rough_similarity_into_a_homography() {
         let mut rng = Rng::new(5);
         let features: Vec<Feature> = (0..200)
-            .map(|_| Feature { x: rng.range(0.0, 50.0), y: rng.range(0.0, 50.0), kind: FeatureKind::Island, area: 1.0, major: 1.0, minor: 1.0 })
+            .map(|_| Feature {
+                x: rng.range(0.0, 50.0),
+                y: rng.range(0.0, 50.0),
+                kind: FeatureKind::Island,
+                area: 1.0,
+                major: 1.0,
+                minor: 1.0,
+            })
             .collect();
         let model = ModelIndex::new(features.clone(), 6, 2.0);
         // Truth: a similarity with a little perspective.
-        let base = Similarity { scale: 0.04, angle: 0.3, tx: 5.0, ty: 5.0 }.to_homography();
-        let truth = Homography([base.0[0], base.0[1], base.0[2], base.0[3], base.0[4], base.0[5], 2e-4, -1e-4, 1.0]);
+        let base = Similarity {
+            scale: 0.04,
+            angle: 0.3,
+            tx: 5.0,
+            ty: 5.0,
+        }
+        .to_homography();
+        let truth = Homography([
+            base.0[0], base.0[1], base.0[2], base.0[3], base.0[4], base.0[5], 2e-4, -1e-4, 1.0,
+        ]);
         let inv = truth.inverse().unwrap();
         let mut points = Vec::new();
         for f in &features {
             let (x, y) = inv.apply(f.x, f.y);
             if (0.0..800.0).contains(&x) && (0.0..600.0).contains(&y) {
-                points.push(ImagePoint { x: x + rng.normal() * 0.3, y: y + rng.normal() * 0.3, area: 600.0, kind: FeatureKind::Island });
+                points.push(ImagePoint {
+                    x: x + rng.normal() * 0.3,
+                    y: y + rng.normal() * 0.3,
+                    area: 600.0,
+                    kind: FeatureKind::Island,
+                });
             }
         }
         // A rough start: the similarity part only, slightly off, trusted
         // near the frame's top left.
-        let rough = Similarity { scale: 0.041, angle: 0.31, tx: 5.3, ty: 4.8 }.to_homography();
-        let fit = refine(&points, &model, &rough, Some((100.0, 100.0)), &RefineParams::default()).expect("fit");
+        let rough = Similarity {
+            scale: 0.041,
+            angle: 0.31,
+            tx: 5.3,
+            ty: 4.8,
+        }
+        .to_homography();
+        let fit = refine(
+            &points,
+            &model,
+            &rough,
+            Some((100.0, 100.0)),
+            &RefineParams::default(),
+        )
+        .expect("fit");
         assert!(fit.projective);
-        assert!(fit.pairs.len() >= points.len() * 9 / 10, "{} of {}", fit.pairs.len(), points.len());
+        assert!(
+            fit.pairs.len() >= points.len() * 9 / 10,
+            "{} of {}",
+            fit.pairs.len(),
+            points.len()
+        );
         assert!(fit.rms < 0.05, "{}", fit.rms);
         for &(x, y) in &[(10.0, 10.0), (790.0, 590.0), (400.0, 300.0)] {
             let a = fit.h.apply(x, y);
@@ -305,11 +481,31 @@ mod tests {
     #[test]
     fn gives_up_without_pairs() {
         let features: Vec<Feature> = (0..10)
-            .map(|i| Feature { x: i as f64 * 3.0, y: 0.0, kind: FeatureKind::Island, area: 1.0, major: 1.0, minor: 1.0 })
+            .map(|i| Feature {
+                x: i as f64 * 3.0,
+                y: 0.0,
+                kind: FeatureKind::Island,
+                area: 1.0,
+                major: 1.0,
+                minor: 1.0,
+            })
             .collect();
         let model = ModelIndex::new(features, 4, 2.0);
-        let points: Vec<ImagePoint> = (0..10).map(|i| ImagePoint { x: i as f64 * 100.0, y: 500.0, area: 1.0, kind: FeatureKind::Island }).collect();
-        let h = Similarity { scale: 0.03, angle: 0.0, tx: 100.0, ty: 100.0 }.to_homography();
+        let points: Vec<ImagePoint> = (0..10)
+            .map(|i| ImagePoint {
+                x: i as f64 * 100.0,
+                y: 500.0,
+                area: 1.0,
+                kind: FeatureKind::Island,
+            })
+            .collect();
+        let h = Similarity {
+            scale: 0.03,
+            angle: 0.0,
+            tx: 100.0,
+            ty: 100.0,
+        }
+        .to_homography();
         assert!(refine(&points, &model, &h, None, &RefineParams::default()).is_none());
     }
 }

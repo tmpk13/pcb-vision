@@ -11,7 +11,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, thiserror::Error)]
 pub enum ImageError {
     #[error("{path}: {source}")]
-    Io { path: String, source: std::io::Error },
+    Io {
+        path: String,
+        source: std::io::Error,
+    },
     #[error("{path}: {message}")]
     Format { path: String, message: String },
     #[error("buffer does not match {width}x{height}")]
@@ -78,11 +81,17 @@ pub struct Integral {
 }
 
 fn io_error(path: &Path, source: std::io::Error) -> ImageError {
-    ImageError::Io { path: path.display().to_string(), source }
+    ImageError::Io {
+        path: path.display().to_string(),
+        source,
+    }
 }
 
 fn format_error(path: &Path, e: impl std::fmt::Display) -> ImageError {
-    ImageError::Format { path: path.display().to_string(), message: e.to_string() }
+    ImageError::Format {
+        path: path.display().to_string(),
+        message: e.to_string(),
+    }
 }
 
 pub fn luma(r: u8, g: u8, b: u8) -> u8 {
@@ -91,14 +100,22 @@ pub fn luma(r: u8, g: u8, b: u8) -> u8 {
 
 impl Gray {
     pub fn new(width: usize, height: usize) -> Gray {
-        Gray { width, height, data: vec![0; width * height] }
+        Gray {
+            width,
+            height,
+            data: vec![0; width * height],
+        }
     }
 
     pub fn from_vec(width: usize, height: usize, data: Vec<u8>) -> Result<Gray, ImageError> {
         if data.len() != width * height {
             return Err(ImageError::Dimensions { width, height });
         }
-        Ok(Gray { width, height, data })
+        Ok(Gray {
+            width,
+            height,
+            data,
+        })
     }
 
     #[inline]
@@ -112,13 +129,21 @@ impl Gray {
 
     pub fn save_png(&self, path: impl AsRef<Path>) -> Result<(), ImageError> {
         let path = path.as_ref();
-        let img = image::GrayImage::from_raw(self.width as u32, self.height as u32, self.data.clone())
-            .ok_or(ImageError::Dimensions { width: self.width, height: self.height })?;
+        let img =
+            image::GrayImage::from_raw(self.width as u32, self.height as u32, self.data.clone())
+                .ok_or(ImageError::Dimensions {
+                    width: self.width,
+                    height: self.height,
+                })?;
         img.save(path).map_err(|e| format_error(path, e))
     }
 
     pub fn to_rgb(&self) -> Rgb {
-        Rgb { width: self.width, height: self.height, data: self.data.iter().flat_map(|&v| [v, v, v]).collect() }
+        Rgb {
+            width: self.width,
+            height: self.height,
+            data: self.data.iter().flat_map(|&v| [v, v, v]).collect(),
+        }
     }
 
     /// Average of each `factor` by `factor` block; a partial block at the
@@ -136,13 +161,18 @@ impl Gray {
             for bx in 0..w {
                 let mut sum = 0u32;
                 for y in by * factor..(by + 1) * factor {
-                    let row = &self.data[y * self.width + bx * factor..y * self.width + (bx + 1) * factor];
+                    let row = &self.data
+                        [y * self.width + bx * factor..y * self.width + (bx + 1) * factor];
                     sum += row.iter().map(|&v| v as u32).sum::<u32>();
                 }
                 out.push(((sum + n / 2) / n) as u8);
             }
         }
-        Gray { width: w, height: h, data: out }
+        Gray {
+            width: w,
+            height: h,
+            data: out,
+        }
     }
 
     pub fn integral(&self) -> Integral {
@@ -155,7 +185,12 @@ impl Gray {
                 data[(y + 1) * stride + x + 1] = data[y * stride + x + 1] + row_sum;
             }
         }
-        Integral { width: self.width, height: self.height, stride, data }
+        Integral {
+            width: self.width,
+            height: self.height,
+            stride,
+            data,
+        }
     }
 
     /// Mean over the square of the given radius around each pixel, the
@@ -173,7 +208,11 @@ impl Gray {
                 out.push(((integral.sum(x0, y0, x1, y1) + n / 2) / n) as u8);
             }
         }
-        Gray { width: self.width, height: self.height, data: out }
+        Gray {
+            width: self.width,
+            height: self.height,
+            data: out,
+        }
     }
 
     /// Bilinear sample at a continuous position; `None` outside the image.
@@ -208,9 +247,9 @@ pub fn otsu_threshold(channel: &Gray) -> u8 {
     let sum_all: u64 = hist.iter().enumerate().map(|(v, &n)| v as u64 * n).sum();
     let (mut w0, mut sum0) = (0u64, 0u64);
     let mut best = (0.0f64, 128u8);
-    for t in 0..255 {
-        w0 += hist[t];
-        sum0 += t as u64 * hist[t];
+    for (t, &count) in hist.iter().enumerate().take(255) {
+        w0 += count;
+        sum0 += t as u64 * count;
         let w1 = total - w0;
         if w0 == 0 || w1 == 0 {
             continue;
@@ -230,20 +269,30 @@ impl Integral {
     #[inline]
     pub fn sum(&self, x0: usize, y0: usize, x1: usize, y1: usize) -> u32 {
         let s = self.stride;
-        self.data[y1 * s + x1] + self.data[y0 * s + x0] - self.data[y0 * s + x1] - self.data[y1 * s + x0]
+        self.data[y1 * s + x1] + self.data[y0 * s + x0]
+            - self.data[y0 * s + x1]
+            - self.data[y1 * s + x0]
     }
 }
 
 impl Rgb {
     pub fn new(width: usize, height: usize) -> Rgb {
-        Rgb { width, height, data: vec![0; width * height * 3] }
+        Rgb {
+            width,
+            height,
+            data: vec![0; width * height * 3],
+        }
     }
 
     pub fn from_vec(width: usize, height: usize, data: Vec<u8>) -> Result<Rgb, ImageError> {
         if data.len() != width * height * 3 {
             return Err(ImageError::Dimensions { width, height });
         }
-        Ok(Rgb { width, height, data })
+        Ok(Rgb {
+            width,
+            height,
+            data,
+        })
     }
 
     #[inline]
@@ -262,19 +311,30 @@ impl Rgb {
     pub fn load(path: impl AsRef<Path>) -> Result<Rgb, ImageError> {
         let path = path.as_ref();
         let reader = image::ImageReader::open(path).map_err(|e| io_error(path, e))?;
-        let reader = reader.with_guessed_format().map_err(|e| io_error(path, e))?;
+        let reader = reader
+            .with_guessed_format()
+            .map_err(|e| io_error(path, e))?;
         let mut decoder = reader.into_decoder().map_err(|e| format_error(path, e))?;
         let orientation = decoder.orientation().map_err(|e| format_error(path, e))?;
-        let mut img = image::DynamicImage::from_decoder(decoder).map_err(|e| format_error(path, e))?;
+        let mut img =
+            image::DynamicImage::from_decoder(decoder).map_err(|e| format_error(path, e))?;
         img.apply_orientation(orientation);
         let rgb = img.into_rgb8();
-        Ok(Rgb { width: rgb.width() as usize, height: rgb.height() as usize, data: rgb.into_raw() })
+        Ok(Rgb {
+            width: rgb.width() as usize,
+            height: rgb.height() as usize,
+            data: rgb.into_raw(),
+        })
     }
 
     pub fn save_png(&self, path: impl AsRef<Path>) -> Result<(), ImageError> {
         let path = path.as_ref();
-        let img = image::RgbImage::from_raw(self.width as u32, self.height as u32, self.data.clone())
-            .ok_or(ImageError::Dimensions { width: self.width, height: self.height })?;
+        let img =
+            image::RgbImage::from_raw(self.width as u32, self.height as u32, self.data.clone())
+                .ok_or(ImageError::Dimensions {
+                    width: self.width,
+                    height: self.height,
+                })?;
         img.save(path).map_err(|e| format_error(path, e))
     }
 
@@ -295,7 +355,11 @@ impl Rgb {
                 }
             })
             .collect();
-        Gray { width: self.width, height: self.height, data }
+        Gray {
+            width: self.width,
+            height: self.height,
+            data,
+        }
     }
 
     /// Average of each `factor` by `factor` block.
@@ -322,7 +386,11 @@ impl Rgb {
                 out.extend(sum.iter().map(|&s| ((s + n / 2) / n) as u8));
             }
         }
-        Rgb { width: w, height: h, data: out }
+        Rgb {
+            width: w,
+            height: h,
+            data: out,
+        }
     }
 
     /// The smallest integer factor that brings the width to `max_width` or
@@ -358,7 +426,8 @@ mod tests {
         let d = g.downscale(2);
         assert_eq!((d.width, d.height), (2, 1));
         assert_eq!(d.data, vec![50, 25]);
-        let rgb = Rgb::from_vec(2, 2, vec![0, 0, 0, 200, 100, 0, 100, 100, 100, 100, 200, 0]).unwrap();
+        let rgb =
+            Rgb::from_vec(2, 2, vec![0, 0, 0, 200, 100, 0, 100, 100, 100, 100, 200, 0]).unwrap();
         assert_eq!(rgb.downscale(2).data, vec![100, 100, 25]);
         assert_eq!(rgb.factor_for(1), 2);
     }
@@ -371,7 +440,10 @@ mod tests {
         // Chroma does not care that the third pixel is half as bright.
         let chroma = rgb.channel(Channel::Chroma).data;
         assert_eq!(chroma[1], 0);
-        assert!((chroma[0] as i32 - chroma[2] as i32).abs() <= 2, "{chroma:?}");
+        assert!(
+            (chroma[0] as i32 - chroma[2] as i32).abs() <= 2,
+            "{chroma:?}"
+        );
     }
 
     #[test]
