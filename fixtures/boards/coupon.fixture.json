@@ -1,0 +1,927 @@
+{
+ "footprints": [
+  {
+   "reference": "U1",
+   "layer": "F.Cu",
+   "at": [
+    161.455,
+    106.33
+   ],
+   "rotation": 0.0,
+   "pads": [
+    {
+     "number": "1",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      157.28,
+      103.53
+     ],
+     "rotation": 0.0,
+     "size": [
+      1.5,
+      0.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PB9-Pad1)"
+    },
+    {
+     "number": "2",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      157.28,
+      104.33
+     ],
+     "rotation": 0.0,
+     "size": [
+      1.5,
+      0.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PC14-Pad2)"
+    },
+    {
+     "number": "3",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      157.28,
+      105.13
+     ],
+     "rotation": 0.0,
+     "size": [
+      1.5,
+      0.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PC15-Pad3)"
+    },
+    {
+     "number": "4",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      157.28,
+      105.93
+     ],
+     "rotation": 0.0,
+     "size": [
+      1.5,
+      0.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-VDD-Pad4)"
+    },
+    {
+     "number": "5",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      157.28,
+      106.73
+     ],
+     "rotation": 0.0,
+     "size": [
+      1.5,
+      0.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-VSS-Pad5)"
+    },
+    {
+     "number": "6",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      157.28,
+      107.53
+     ],
+     "rotation": 0.0,
+     "size": [
+      1.5,
+      0.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-NRST-Pad6)"
+    },
+    {
+     "number": "7",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      157.28,
+      108.33
+     ],
+     "rotation": 0.0,
+     "size": [
+      1.5,
+      0.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PA0-Pad7)"
+    },
+    {
+     "number": "8",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      157.28,
+      109.13
+     ],
+     "rotation": 0.0,
+     "size": [
+      1.5,
+      0.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PA1-Pad8)"
+    },
+    {
+     "number": "9",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      158.655,
+      110.505
+     ],
+     "rotation": 0.0,
+     "size": [
+      0.5,
+      1.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PA2-Pad9)"
+    },
+    {
+     "number": "10",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      159.455,
+      110.505
+     ],
+     "rotation": 0.0,
+     "size": [
+      0.5,
+      1.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PA3-Pad10)"
+    },
+    {
+     "number": "11",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      160.255,
+      110.505
+     ],
+     "rotation": 0.0,
+     "size": [
+      0.5,
+      1.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PA4-Pad11)"
+    },
+    {
+     "number": "12",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      161.055,
+      110.505
+     ],
+     "rotation": 0.0,
+     "size": [
+      0.5,
+      1.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PA5-Pad12)"
+    },
+    {
+     "number": "13",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      161.855,
+      110.505
+     ],
+     "rotation": 0.0,
+     "size": [
+      0.5,
+      1.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PA6-Pad13)"
+    },
+    {
+     "number": "14",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      162.655,
+      110.505
+     ],
+     "rotation": 0.0,
+     "size": [
+      0.5,
+      1.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PA7-Pad14)"
+    },
+    {
+     "number": "15",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      163.455,
+      110.505
+     ],
+     "rotation": 0.0,
+     "size": [
+      0.5,
+      1.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PB0-Pad15)"
+    },
+    {
+     "number": "16",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      164.255,
+      110.505
+     ],
+     "rotation": 0.0,
+     "size": [
+      0.5,
+      1.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PB1-Pad16)"
+    },
+    {
+     "number": "17",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      165.63,
+      109.13
+     ],
+     "rotation": 0.0,
+     "size": [
+      1.5,
+      0.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PB2-Pad17)"
+    },
+    {
+     "number": "18",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      165.63,
+      108.33
+     ],
+     "rotation": 0.0,
+     "size": [
+      1.5,
+      0.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PA8-Pad18)"
+    },
+    {
+     "number": "19",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      165.63,
+      107.53
+     ],
+     "rotation": 0.0,
+     "size": [
+      1.5,
+      0.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-NC{slash}PA9-Pad19)"
+    },
+    {
+     "number": "20",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      165.63,
+      106.73
+     ],
+     "rotation": 0.0,
+     "size": [
+      1.5,
+      0.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PC6-Pad20)"
+    },
+    {
+     "number": "21",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      165.63,
+      105.93
+     ],
+     "rotation": 0.0,
+     "size": [
+      1.5,
+      0.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-NC{slash}PA10-Pad21)"
+    },
+    {
+     "number": "22",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      165.63,
+      105.13
+     ],
+     "rotation": 0.0,
+     "size": [
+      1.5,
+      0.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PA9{slash}PA11-Pad22)"
+    },
+    {
+     "number": "23",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      165.63,
+      104.33
+     ],
+     "rotation": 0.0,
+     "size": [
+      1.5,
+      0.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PA10{slash}PA12-Pad23)"
+    },
+    {
+     "number": "24",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      165.63,
+      103.53
+     ],
+     "rotation": 0.0,
+     "size": [
+      1.5,
+      0.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PA13-Pad24)"
+    },
+    {
+     "number": "25",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      164.255,
+      102.155
+     ],
+     "rotation": 0.0,
+     "size": [
+      0.5,
+      1.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PA14-Pad25)"
+    },
+    {
+     "number": "26",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      163.455,
+      102.155
+     ],
+     "rotation": 0.0,
+     "size": [
+      0.5,
+      1.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PA15-Pad26)"
+    },
+    {
+     "number": "27",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      162.655,
+      102.155
+     ],
+     "rotation": 0.0,
+     "size": [
+      0.5,
+      1.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PB3-Pad27)"
+    },
+    {
+     "number": "28",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      161.855,
+      102.155
+     ],
+     "rotation": 0.0,
+     "size": [
+      0.5,
+      1.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PB4-Pad28)"
+    },
+    {
+     "number": "29",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      161.055,
+      102.155
+     ],
+     "rotation": 0.0,
+     "size": [
+      0.5,
+      1.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PB5-Pad29)"
+    },
+    {
+     "number": "30",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      160.255,
+      102.155
+     ],
+     "rotation": 0.0,
+     "size": [
+      0.5,
+      1.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PB6-Pad30)"
+    },
+    {
+     "number": "31",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      159.455,
+      102.155
+     ],
+     "rotation": 0.0,
+     "size": [
+      0.5,
+      1.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PB7-Pad31)"
+    },
+    {
+     "number": "32",
+     "kind": "smd",
+     "shape": "roundrect",
+     "at": [
+      158.655,
+      102.155
+     ],
+     "rotation": 0.0,
+     "size": [
+      0.5,
+      1.5
+     ],
+     "drill": [
+      0.0,
+      0.0
+     ],
+     "layers": [
+      "F.Cu",
+      "F.Mask",
+      "F.Paste"
+     ],
+     "net": "unconnected-(U1-PB8-Pad32)"
+    }
+   ]
+  }
+ ],
+ "tracks": [
+  {
+   "start": [
+    170.505,
+    108.33
+   ],
+   "end": [
+    171.675,
+    109.5
+   ],
+   "width": 0.2,
+   "layer": "F.Cu"
+  },
+  {
+   "start": [
+    165.63,
+    108.33
+   ],
+   "end": [
+    170.505,
+    108.33
+   ],
+   "width": 0.2,
+   "layer": "F.Cu"
+  },
+  {
+   "start": [
+    173.245,
+    106.73
+   ],
+   "end": [
+    174.225,
+    105.75
+   ],
+   "width": 0.2,
+   "layer": "F.Cu"
+  },
+  {
+   "start": [
+    165.63,
+    106.73
+   ],
+   "end": [
+    173.245,
+    106.73
+   ],
+   "width": 0.2,
+   "layer": "F.Cu"
+  },
+  {
+   "start": [
+    165.63,
+    103.53
+   ],
+   "end": [
+    169.145,
+    103.53
+   ],
+   "width": 0.2,
+   "layer": "F.Cu"
+  },
+  {
+   "start": [
+    169.145,
+    103.53
+   ],
+   "end": [
+    172.225,
+    100.45
+   ],
+   "width": 0.2,
+   "layer": "F.Cu"
+  },
+  {
+   "start": [
+    172.225,
+    100.45
+   ],
+   "end": [
+    174.225,
+    100.45
+   ],
+   "width": 0.2,
+   "layer": "F.Cu"
+  },
+  {
+   "start": [
+    165.63,
+    104.33
+   ],
+   "end": [
+    169.695,
+    104.33
+   ],
+   "width": 0.2,
+   "layer": "F.Cu"
+  },
+  {
+   "start": [
+    172.675,
+    101.35
+   ],
+   "end": [
+    174.15,
+    101.35
+   ],
+   "width": 0.2,
+   "layer": "F.Cu"
+  },
+  {
+   "start": [
+    169.695,
+    104.33
+   ],
+   "end": [
+    172.675,
+    101.35
+   ],
+   "width": 0.2,
+   "layer": "F.Cu"
+  }
+ ],
+ "arcs": [],
+ "vias": [],
+ "zones": [],
+ "edges": [
+  {
+   "shape": "Rect",
+   "start": [
+    149.425,
+    97.175
+   ],
+   "end": [
+    179.625,
+    116.825
+   ]
+  }
+ ],
+ "edge_bbox": [
+  149.4,
+  97.15,
+  179.65,
+  116.85
+ ]
+}

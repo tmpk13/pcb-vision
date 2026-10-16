@@ -1,0 +1,16 @@
+[package]
+name = "pcbv-vision"
+description = "Image processing, constellation matching and pose tracking against a board model"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+pcbv-board.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tiny-skia.workspace = true
+nalgebra.workspace = true
+image.workspace = true

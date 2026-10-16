@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+ref/
+
+# Reference photos and other large local inputs
+ref/

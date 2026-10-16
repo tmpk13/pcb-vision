@@ -1,0 +1,15 @@
+[package]
+name = "pcbv-board"
+description = "KiCad board file parsing, geometry and rasterization"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+tiny-skia.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

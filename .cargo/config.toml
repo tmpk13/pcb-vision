@@ -1,0 +1,7 @@
+# The V4L2 bindings run bindgen at build time. A shell set up for the ESP
+# toolchain exports LIBCLANG_PATH pointing at a clang without an x86_64
+# backend, which makes bindgen fail on a pointer width assertion, so the
+# system libclang is pinned here for every terminal and every mise task.
+# On another machine, point this at the directory holding libclang.so.
+[env]
+LIBCLANG_PATH = { value = "/usr/lib/llvm-18/lib", force = true }
