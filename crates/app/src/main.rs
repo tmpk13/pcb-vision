@@ -102,7 +102,8 @@ enum Command {
         pcb: PathBuf,
         #[command(flatten)]
         view: ViewArgs,
-        /// Camera device
+        /// Camera device, or an image file or a directory of images to
+        /// replay instead of a camera
         #[arg(long, default_value = "/dev/video0")]
         camera: String,
         /// Capture size, "WIDTHxHEIGHT"
@@ -364,13 +365,35 @@ fn main() -> Result<()> {
             let (w, h) = size
                 .split_once('x')
                 .ok_or_else(|| anyhow!("size must be WIDTHxHEIGHT"))?;
-            let capture = pcbv_camera::CaptureConfig {
-                path: camera,
-                width: w.parse()?,
-                height: h.parse()?,
-                fps,
+            let path = PathBuf::from(&camera);
+            let source = if path.is_dir() {
+                let mut paths: Vec<PathBuf> = std::fs::read_dir(&path)?
+                    .filter_map(|e| e.ok().map(|e| e.path()))
+                    .filter(|p| {
+                        p.extension().is_some_and(|x| {
+                            matches!(x.to_str(), Some("png" | "jpg" | "jpeg" | "PNG" | "JPG"))
+                        })
+                    })
+                    .collect();
+                paths.sort();
+                live::Source::Replay {
+                    paths,
+                    fps: fps as f64,
+                }
+            } else if path.is_file() {
+                live::Source::Replay {
+                    paths: vec![path],
+                    fps: fps as f64,
+                }
+            } else {
+                live::Source::Camera(pcbv_camera::CaptureConfig {
+                    path: camera,
+                    width: w.parse()?,
+                    height: h.parse()?,
+                    fps,
+                })
             };
-            let worker = live::start(board, config.clone(), capture, json || no_window)?;
+            let worker = live::start(board, config.clone(), source, json || no_window)?;
             if no_window {
                 live::headless(worker, frames)?;
             } else {

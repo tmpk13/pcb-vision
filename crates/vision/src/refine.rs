@@ -250,9 +250,28 @@ fn reanchor(
         None
     };
     let mut scratch = Vec::new();
+    // Neighbors landing on features under a shift, and how far off.
+    let score = |shift: (f64, f64), scratch: &mut Vec<u32>| {
+        let mut hits = 0;
+        let mut error = 0.0;
+        for n in &neighbors {
+            let (x, y) = h.apply(n.x, n.y);
+            let nk = if params.same_kind { Some(n.kind) } else { None };
+            if let Some((_, d)) =
+                model.nearest(x + shift.0, y + shift.1, params.tolerance, nk, scratch)
+            {
+                hits += 1;
+                error += d;
+            }
+        }
+        (hits, error)
+    };
+    // The map as it is competes: when the nearest spot is clutter every
+    // shift is wrong, and the unshifted map must win.
+    let (base_hits, base_error) = score((0.0, 0.0), &mut scratch);
+    let mut best: (usize, f64, (f64, f64)) = (base_hits, base_error, (0.0, 0.0));
     let mut candidates = Vec::new();
     model.grid_candidates(px, py, params.reanchor_radius, &mut candidates);
-    let mut best: Option<(usize, f64, (f64, f64))> = None;
     for &c in &candidates {
         let f = &model.features[c as usize];
         if kind.is_some_and(|k| f.kind != k) || (f.x - px).hypot(f.y - py) > params.reanchor_radius
@@ -260,32 +279,17 @@ fn reanchor(
             continue;
         }
         let shift = (f.x - px, f.y - py);
-        let mut hits = 0;
-        let mut error = 0.0;
-        for n in &neighbors {
-            let (x, y) = h.apply(n.x, n.y);
-            let nk = if params.same_kind { Some(n.kind) } else { None };
-            if let Some((_, d)) =
-                model.nearest(x + shift.0, y + shift.1, params.tolerance, nk, &mut scratch)
-            {
-                hits += 1;
-                error += d;
-            }
-        }
-        let better = match best {
-            None => true,
-            Some((bh, be, _)) => hits > bh || (hits == bh && error < be),
-        };
-        if better {
-            best = Some((hits, error, shift));
+        let (hits, error) = score(shift, &mut scratch);
+        if hits > best.0 || (hits == best.0 && error < best.1) {
+            best = (hits, error, shift);
         }
     }
-    match best {
-        Some((hits, _, shift)) if hits >= 2 && (shift.0.abs() > 1e-9 || shift.1.abs() > 1e-9) => {
-            let t = Homography([1.0, 0.0, shift.0, 0.0, 1.0, shift.1, 0.0, 0.0, 1.0]);
-            h.then(&t)
-        }
-        _ => *h,
+    let shift = best.2;
+    if best.0 >= 2 && (shift.0.abs() > 1e-9 || shift.1.abs() > 1e-9) {
+        let t = Homography([1.0, 0.0, shift.0, 0.0, 1.0, shift.1, 0.0, 0.0, 1.0]);
+        h.then(&t)
+    } else {
+        *h
     }
 }
 
@@ -345,19 +349,20 @@ pub fn refine(
             growth,
         );
         let pairs: Vec<(usize, usize)> = local.iter().map(|&(i, f)| (within_index[i], f)).collect();
-        if pairs.len() < 3 {
-            break;
+        // Too few pairs this close to the anchor (clutter, or an empty
+        // patch of board under the frame center) is no reason to give up:
+        // the circle grows and the map is tried again further out.
+        if pairs.len() >= 3 {
+            if let Some((candidate, projective, rms)) = fit_pairs(points, model, &pairs, params) {
+                h = candidate;
+                fit = Some(Fit {
+                    h,
+                    pairs,
+                    rms,
+                    projective,
+                });
+            }
         }
-        let Some((candidate, projective, rms)) = fit_pairs(points, model, &pairs, params) else {
-            break;
-        };
-        h = candidate;
-        fit = Some(Fit {
-            h,
-            pairs,
-            rms,
-            projective,
-        });
         if radius >= frame_radius {
             break;
         }

@@ -20,5 +20,6 @@
 - Synthetic camera pictures from the model and end to end tests on the
   fixture boards; all 16 reference photos locate.
 - V4L2 capture crate; `pcbv` with board, render, synth, locate, cameras
-  and live (egui window or JSON lines); overlays and board map pictures.
+  and live (egui window or JSON lines, a camera or replayed pictures,
+  window screenshots); overlays and board map pictures; coasting state.
 - Docs, mise tasks, notes.

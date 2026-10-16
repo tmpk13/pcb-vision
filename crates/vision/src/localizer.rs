@@ -106,7 +106,7 @@ pub struct LocalizerConfig {
     /// Least fraction of the spots the pose puts on the board that must be
     /// explained by it.
     pub min_explained: f64,
-    /// Frames without enough pairs before the board counts as lost.
+    /// Frames without a verified pose before the search runs again.
     pub lost_after: u32,
 }
 
@@ -128,14 +128,18 @@ impl Default for LocalizerConfig {
             track_tolerance: 0.4,
             min_coverage: 0.25,
             min_explained: 0.2,
-            lost_after: 5,
+            lost_after: 3,
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum State {
+    /// No pose; every frame runs the search.
     Lost,
+    /// No pose this frame, but the last one is still tried first.
+    Coasting,
+    /// A verified pose for this frame.
     Locked,
 }
 
@@ -468,12 +472,16 @@ impl Localizer {
                 (Some(pose), f.pairs)
             }
             None => {
-                if self.state == State::Locked {
+                if self.last.is_some() {
                     self.misses += 1;
                     if self.misses >= self.config.lost_after {
                         self.state = State::Lost;
                         self.last = None;
+                    } else {
+                        self.state = State::Coasting;
                     }
+                } else {
+                    self.state = State::Lost;
                 }
                 (None, Vec::new())
             }

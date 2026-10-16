@@ -126,7 +126,25 @@ pitch of a pad array, which pairs every pad with its neighbor and gives a
 confident, wrong fit. The spot nearest the frame center is therefore
 tried against each feature within 2 mm of where the old map puts it,
 and the shift that lands the most of its neighbors on features is
-applied before growing.
+applied before growing. The unshifted map competes too: when that
+nearest spot is silkscreen clutter every shift is wrong, and without
+the baseline one of them won and tracking failed on every frame.
+
+Growing must not give up when the first circle holds fewer than three
+pairs. Under a frame center that sits on an empty patch of board or on
+clutter, the dozen nearest spots pair with nothing, and breaking out
+there left the tracker coasting on a picture it had just located. The
+circle keeps growing with the map unchanged until pairs appear.
+
+## Frame to frame
+
+A frame without a verified pose is reported as coasting while the last
+pose is still tried first, and as lost once three frames in a row have
+failed, when the search runs again. A consumer of the JSON lines should
+read the pose fields only on locked frames. Replaying pictures from
+disk in place of a camera (`--camera photo.jpg` or a directory) runs the
+same threads and is how tracking was checked without a board under the
+webcam.
 
 ## Synthetic pictures
 

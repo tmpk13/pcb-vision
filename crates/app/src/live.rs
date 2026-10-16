@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use pcbv_board::{Board, Finish, Point, Side};
-use pcbv_camera::{spawn, CaptureConfig, CaptureHandle};
+use pcbv_camera::{spawn, CaptureConfig, CaptureHandle, Frame};
 use pcbv_vision::draw::{board_map, overlay};
 use pcbv_vision::{Feature, Localizer, LocalizerConfig, Look, Observation, Rgb, State};
 
@@ -62,17 +62,75 @@ fn model_view(localizer: &Localizer) -> ModelView {
     }
 }
 
-/// Start the camera and the localizer on their own threads.
+/// Where frames come from: a camera, or pictures replayed from disk.
+pub enum Source {
+    Camera(CaptureConfig),
+    /// Image files shown in turn at the given rate, forever.
+    Replay {
+        paths: Vec<std::path::PathBuf>,
+        fps: f64,
+    },
+}
+
+/// Pictures from disk pushed through the same handle a camera uses.
+fn spawn_replay(paths: Vec<std::path::PathBuf>, fps: f64) -> Result<CaptureHandle> {
+    if paths.is_empty() {
+        return Err(anyhow!("nothing to replay"));
+    }
+    let images: Vec<Rgb> = paths
+        .iter()
+        .map(|p| Rgb::load(p).map_err(|e| anyhow!("{e}")))
+        .collect::<Result<_>>()?;
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (tx, rx) = sync_channel::<Frame>(1);
+    let stop_thread = stop.clone();
+    let period = Duration::from_secs_f64(1.0 / fps.max(0.1));
+    let thread = std::thread::Builder::new()
+        .name("replay".into())
+        .spawn(move || {
+            let mut sequence = 0u64;
+            loop {
+                for img in &images {
+                    if stop_thread.load(std::sync::atomic::Ordering::Relaxed) {
+                        return Ok(());
+                    }
+                    sequence += 1;
+                    let frame = Frame {
+                        rgb: img.clone(),
+                        sequence,
+                        captured: Instant::now(),
+                        decode_ms: 0.0,
+                    };
+                    match tx.try_send(frame) {
+                        Ok(()) | Err(TrySendError::Full(_)) => {}
+                        Err(TrySendError::Disconnected(_)) => return Ok(()),
+                    }
+                    std::thread::sleep(period);
+                }
+            }
+        })
+        .map_err(|e| anyhow!("spawning replay thread: {e}"))?;
+    Ok(CaptureHandle {
+        frames: rx,
+        stop,
+        thread,
+    })
+}
+
+/// Start the frame source and the localizer on their own threads.
 pub fn start(
     board: Arc<Board>,
     config: LocalizerConfig,
-    camera: CaptureConfig,
+    source: Source,
     json: bool,
 ) -> Result<Worker> {
     let (result_tx, result_rx) = sync_channel::<FrameResult>(1);
     let (model_tx, model_rx) = sync_channel::<Arc<ModelView>>(2);
     let (command_tx, command_rx) = std::sync::mpsc::channel::<Command>();
-    let capture: CaptureHandle = spawn(camera);
+    let capture: CaptureHandle = match source {
+        Source::Camera(camera) => spawn(camera),
+        Source::Replay { paths, fps } => spawn_replay(paths, fps)?,
+    };
     std::thread::Builder::new()
         .name("localizer".into())
         .spawn(move || {
@@ -162,7 +220,11 @@ pub fn start(
 /// One line of JSON per frame for another program to read.
 pub fn pose_line(obs: &Observation, fps: f64) -> String {
     let mut v = serde_json::json!({
-        "state": match obs.state { State::Locked => "locked", State::Lost => "lost" },
+        "state": match obs.state {
+            State::Locked => "locked",
+            State::Coasting => "coasting",
+            State::Lost => "lost",
+        },
         "fps": (fps * 10.0).round() / 10.0,
         "spots": obs.spots.len(),
         "look": obs.look.to_string(),
@@ -377,6 +439,7 @@ impl App {
             }
             self.status = match r.obs.state {
                 State::Locked => "locked".into(),
+                State::Coasting => "tracking from the last pose".into(),
                 State::Lost => format!("searching through {}", r.obs.look),
             };
             self.latest = Some(r);
@@ -387,6 +450,7 @@ impl App {
         ui.horizontal_wrapped(|ui| {
             let (color, text) = match self.latest.as_ref().map(|r| r.obs.state) {
                 Some(State::Locked) => (sol::GREEN, "LOCKED"),
+                Some(State::Coasting) => (sol::YELLOW, "COASTING"),
                 Some(State::Lost) => (sol::RED, "LOST"),
                 None => (sol::YELLOW, "WAITING"),
             };
